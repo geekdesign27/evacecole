@@ -1,3 +1,4 @@
+import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -11,6 +12,8 @@ import {
 import { fmtDateLong, reportFileName } from "../domain/format";
 import { device } from "../lib/storage";
 import { typo } from "../lib/typo";
+import { escapeHtml, mapRuns, parseRich, toEditorHtml, type RichRun } from "../domain/rich";
+import { RichEditor } from "../components/RichEditor";
 import { useTeam } from "../lib/team";
 import { downloadBlob, loadAssets } from "../export/assets";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
@@ -275,7 +278,7 @@ function ReportEditor({
             onChange={(v) => edit("objective", v)}
           />
           <Field
-            label="Recommandations (texte libre, une par paragraphe)"
+            label="Recommandations"
             rows={8}
             value={shown("recommendations")}
             onChange={(v) => edit("recommendations", v)}
@@ -285,9 +288,9 @@ function ReportEditor({
               variant="secondary"
               className="self-start"
               onClick={() => {
-                const current = (fields.recommendations ?? "").trim();
-                const extra = model.suggestedRecommendations.filter((r) => !current.includes(r));
-                edit("recommendations", [current, ...extra].filter(Boolean).join("\n\n"));
+                const current = toEditorHtml((fields.recommendations ?? "").trim());
+                const extra = model.suggestedRecommendations.filter((r) => !current.includes(escapeHtml(r)));
+                edit("recommendations", current + extra.map((r) => `<p>${escapeHtml(r)}</p>`).join(""));
               }}
             >
               Insérer les suggestions ({model.suggestedRecommendations.length})
@@ -328,19 +331,16 @@ function Field({
   rows?: number;
 }) {
   const id = `f-${label.replace(/\W+/g, "-")}`;
+  if (rows) {
+    return <RichEditor id={id} label={label} value={value} onChange={onChange} minRows={rows} />;
+  }
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="font-medium">
         {label}
       </label>
       {rows ? (
-        <textarea
-          id={id}
-          className="field"
-          rows={rows}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <RichEditor id={id} label={label} value={value} onChange={onChange} minRows={rows} />
       ) : (
         <input
           id={id}
@@ -426,9 +426,9 @@ function Preview({ model }: { model: ReportModel }) {
         )}
       </dl>
       <h3 className="mt-4 text-lg font-bold text-brand">Introduction</h3>
-      <p>{t(model.intro)}</p>
+      <RichView value={model.intro} />
       <h3 className="mt-4 text-lg font-bold text-brand">Objectif</h3>
-      <p>{t(model.objective)}</p>
+      <RichView value={model.objective} />
 
       {model.schools.map((s) => (
         <section key={s.exerciseId} className="mt-4">
@@ -499,21 +499,63 @@ function Preview({ model }: { model: ReportModel }) {
         </section>
       ))}
 
-      {model.recommendations.length > 0 && (
+      {model.recommendations && (
         <>
           <h3 className="mt-4 text-lg font-bold text-brand">Recommandations</h3>
-          {model.recommendations.map((r, i) => (
-            <p key={i} className="mb-2">
-              {t(r)}
-            </p>
-          ))}
+          <RichView value={model.recommendations} />
         </>
       )}
       <h3 className="mt-4 text-lg font-bold text-brand">Conclusion</h3>
-      <p>{t(model.conclusion)}</p>
+      <RichView value={model.conclusion} />
       <footer className="mt-6 border-t border-line pt-2 text-sm text-muted">
         Compagnie des sapeurs-pompiers Moncor, www.cpmoncor.ch
       </footer>
     </article>
+  );
+}
+
+function Runs({ runs }: { runs: RichRun[] }) {
+  return (
+    <>
+      {runs.map((r, i) => {
+        if (r.text === "\n") return <br key={i} />;
+        let node: React.ReactNode = r.text;
+        if (r.italic) node = <em>{node}</em>;
+        if (r.bold) node = <strong>{node}</strong>;
+        return <span key={i}>{node}</span>;
+      })}
+    </>
+  );
+}
+
+/** Renders stored rich text from the whitelist structure only (never as raw HTML). */
+function RichView({ value }: { value: string }) {
+  const doc = mapRuns(parseRich(value), typo);
+  return (
+    <div className="rich-content">
+      {doc.map((b, i) =>
+        b.kind === "p" ? (
+          <p key={i}>
+            <Runs runs={b.runs} />
+          </p>
+        ) : b.kind === "ul" ? (
+          <ul key={i}>
+            {b.items.map((it, j) => (
+              <li key={j}>
+                <Runs runs={it} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <ol key={i}>
+            {b.items.map((it, j) => (
+              <li key={j}>
+                <Runs runs={it} />
+              </li>
+            ))}
+          </ol>
+        ),
+      )}
+    </div>
   );
 }

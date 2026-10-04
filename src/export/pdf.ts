@@ -1,6 +1,7 @@
 import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
 import type { ReportBlock, ReportLine, ReportModel, ReportPhoto, SchoolReport } from "../domain/buildReport";
 import { typo } from "../lib/typo";
+import { mapRuns, parseRich, type RichRun } from "../domain/rich";
 import { FOOTER_TEXT, type ExportAssets } from "./assets";
 
 const BRAND = "#C71A1A";
@@ -25,6 +26,29 @@ function infoTable(model: ReportModel): Content {
     layout: { hLineColor: () => LINE, vLineColor: () => LINE },
     margin: [0, 0, 0, 14],
   };
+}
+
+function pdfRuns(runs: RichRun[]): Content[] {
+  return runs.map((r) => ({ text: r.text, bold: r.bold, italics: r.italic }) as Content);
+}
+
+/** Rich report field to pdfmake paragraphs and lists. */
+function richContent(value: string): Content[] {
+  return mapRuns(parseRich(value), t).map((b) =>
+    b.kind === "p"
+      ? ({ text: pdfRuns(b.runs), margin: [0, 0, 0, 5] } as Content)
+      : b.kind === "ul"
+        ? ({ ul: b.items.map((it) => ({ text: pdfRuns(it), margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 6] } as Content)
+        : ({ ol: b.items.map((it) => ({ text: pdfRuns(it), margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 6] } as Content),
+  );
+}
+
+/** Heading kept on the same page as the first paragraph; short sections stay whole. */
+function richSection(title: string, value: string): Content[] {
+  const blocks = richContent(value);
+  const head: Content = { text: title, style: "h2" };
+  if (blocks.length <= 2) return [{ stack: [head, ...blocks], unbreakable: true }];
+  return [{ stack: [head, blocks[0]], unbreakable: true }, ...blocks.slice(1)];
 }
 
 function photoGrid(photos: ReportPhoto[], assets: ExportAssets): Content | null {
@@ -104,14 +128,13 @@ export function buildPdfDefinition(model: ReportModel, assets: ExportAssets): TD
   };
 
   const content: Content[] = [header, infoTable(model)];
-  content.push({ text: "Introduction", style: "h2" }, { text: t(model.intro), margin: [0, 0, 0, 4] });
-  content.push({ text: "Objectif", style: "h2" }, { text: t(model.objective), margin: [0, 0, 0, 10] });
+  content.push(...richSection("Introduction", model.intro));
+  content.push(...richSection("Objectif", model.objective));
   model.schools.forEach((s) => content.push(...schoolBlock(s, model, assets)));
-  if (model.recommendations.length) {
-    content.push({ text: "Recommandations", style: "h2" });
-    for (const r of model.recommendations) content.push({ text: t(r), margin: [0, 0, 0, 5] });
+  if (model.recommendations) {
+    content.push(...richSection("Recommandations", model.recommendations));
   }
-  content.push({ text: "Conclusion", style: "h2" }, { text: t(model.conclusion) });
+  content.push(...richSection("Conclusion", model.conclusion));
 
   return {
     pageSize: "A4",

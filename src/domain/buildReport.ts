@@ -14,6 +14,7 @@ import {
   type Role,
   type TimeField,
 } from "./checklist";
+import { isRichEmpty } from "./rich";
 import {
   fmtDateLong,
   fmtDateShort,
@@ -124,8 +125,8 @@ export interface ReportModel {
   objective: string;
   conclusion: string;
   schools: SchoolReport[];
-  /** Free text from the author; empty means no recommendation section. */
-  recommendations: string[];
+  /** Rich text (HTML) or plain text from the author; empty means no recommendation section. */
+  recommendations: string;
   /** Suggestions deduced from Partial/No answers, offered in the editor. */
   suggestedRecommendations: string[];
   missingCount: number;
@@ -457,7 +458,7 @@ export function buildReport(
     objective: fields.objective?.trim() || DEFAULT_OBJECTIVE,
     conclusion: fields.conclusion?.trim() || DEFAULT_CONCLUSION,
     schools,
-    recommendations: splitParagraphs(fields.recommendations ?? ""),
+    recommendations: isRichEmpty(fields.recommendations) ? "" : (fields.recommendations ?? "").trim(),
     suggestedRecommendations,
     missingCount: schools.reduce((n, s) => n + s.missing.length, 0),
   };

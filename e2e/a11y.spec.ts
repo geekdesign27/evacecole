@@ -21,4 +21,10 @@ test("exercise screen has no accessibility violations", async ({ page }) => {
     expect(violations.map((v) => `${role}: ${v.id} (${v.nodes.length}) ${v.help}`)).toEqual([]);
     if (role === "lead") await page.getByRole("button", { name: "Changer de rôle" }).click();
   }
+
+  // Synthesis page with the rich text editors
+  await page.getByRole("link", { name: "Synthèse" }).click();
+  await expect(page.getByRole("toolbar", { name: "Mise en forme : Recommandations" })).toBeVisible();
+  const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(violations.map((v) => `report: ${v.id} (${v.nodes.length}) ${v.help}`)).toEqual([]);
 });

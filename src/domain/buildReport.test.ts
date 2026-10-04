@@ -223,7 +223,7 @@ describe("buildReport", () => {
     expect(report.suggestedRecommendations).toEqual(
       RECOMMENDATIONS.filter((r) => ["formation", "portes", "calage"].includes(r.key)).map((r) => r.text),
     );
-    expect(report.recommendations).toEqual([]);
+    expect(report.recommendations).toBe("");
     expect(report.objective).toContain("Vérifier la réaction du personnel");
     expect(report.intro).not.toContain("Objectif");
   });
@@ -281,7 +281,9 @@ describe("buildReport", () => {
     const r = buildReport([exercise], [lead], {
       fields: { recommendations: "Premier point.\n\nDeuxième point." },
     });
-    expect(r.recommendations).toEqual(["Premier point.", "Deuxième point."]);
+    const empty = buildReport([exercise], [lead], { fields: { recommendations: "<p></p>" } });
+    expect(empty.recommendations).toBe("");
+    expect(r.recommendations).toBe("Premier point.\n\nDeuxième point.");
     expect(r.suggestedRecommendations.length).toBeGreaterThan(0);
   });
 });

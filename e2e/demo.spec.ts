@@ -141,7 +141,24 @@ test("demo report", async ({ browser }) => {
 
   await lead.getByRole("link", { name: "Synthèse" }).click();
   await lead.getByLabel("Rédigé par").fill("Plt Pierre-Alain Schütz");
+  // Formatted recommendations: a bold lead-in, then a bullet list, then the suggestions
+  const reco = lead.getByRole("textbox", { name: "Recommandations" });
+  const bar = lead.getByRole("toolbar", { name: "Mise en forme : Recommandations" });
+  await reco.click();
+  await bar.getByRole("button", { name: "Gras" }).click();
+  await lead.keyboard.type("Priorités pour la prochaine rentrée :");
+  await bar.getByRole("button", { name: "Gras" }).click();
+  await lead.keyboard.press("Enter");
+  await bar.getByRole("button", { name: "Liste à puces" }).click();
+  await lead.keyboard.type("retrouver le gilet et le classeur d'évacuation au secrétariat ;");
+  await lead.keyboard.press("Enter");
+  await lead.keyboard.type("supprimer le coin en bois de la porte coupe-feu du 1er étage.");
+  await lead.keyboard.press("Enter");
+  await lead.keyboard.press("Enter");
   await lead.getByRole("button", { name: /Insérer les suggestions/ }).click();
+  const preview = lead.getByRole("article", { name: "Aperçu du rapport" });
+  await expect(preview.locator("strong", { hasText: "Priorités pour la prochaine rentrée" })).toBeVisible();
+  await expect(preview.locator("ul li", { hasText: "coin en bois" })).toBeVisible();
   await expect(lead.getByRole("article", { name: "Aperçu du rapport" })).toContainText("Proscrire le calage");
   for (const [button, ext] of [["Télécharger PDF", "pdf"], ["Télécharger Word", "docx"]] as const) {
     const [d] = await Promise.all([lead.waitForEvent("download"), lead.getByRole("button", { name: button }).click()]);

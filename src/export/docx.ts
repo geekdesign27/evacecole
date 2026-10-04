@@ -20,6 +20,7 @@ import {
 import type { ReportBlock, ReportLine, ReportModel, SchoolReport } from "../domain/buildReport";
 import { dataUrlToBytes, type RasterImage } from "../lib/images";
 import { typo } from "../lib/typo";
+import { mapRuns, parseRich, type RichRun } from "../domain/rich";
 import { FOOTER_TEXT, type ExportAssets } from "./assets";
 
 const t = typo;
@@ -70,6 +71,36 @@ function kvTable(
         }),
     ),
   });
+}
+
+let numberedListInstance = 0;
+
+function richRuns(runs: RichRun[]): TextRun[] {
+  return runs.map((r) =>
+    r.text === "\n" ? new TextRun({ text: "", break: 1 }) : new TextRun({ text: r.text, bold: r.bold, italics: r.italic }),
+  );
+}
+
+/** Rich report field to real Word paragraphs and lists (editable in Word). */
+function richParagraphs(value: string): Paragraph[] {
+  const out: Paragraph[] = [];
+  for (const b of mapRuns(parseRich(value), t)) {
+    if (b.kind === "p") {
+      out.push(new Paragraph({ spacing: { after: 120 }, children: richRuns(b.runs) }));
+    } else {
+      // Each numbered list restarts at 1.
+      const instance = b.kind === "ol" ? ++numberedListInstance : 0;
+      for (const item of b.items) {
+        out.push(
+          new Paragraph({
+            numbering: { reference: b.kind === "ol" ? "numbers" : "bullets", level: 0, ...(b.kind === "ol" ? { instance } : {}) },
+            children: richRuns(item),
+          }),
+        );
+      }
+    }
+  }
+  return out;
 }
 
 function heading(
@@ -168,26 +199,13 @@ export async function renderDocx(
       25,
     ),
   );
-  children.push(
-    heading("Introduction", HeadingLevel.HEADING_2),
-    new Paragraph(t(model.intro)),
-    heading("Objectif", HeadingLevel.HEADING_2),
-    new Paragraph(t(model.objective)),
-  );
-  for (const s of model.schools)
-    children.push(...schoolBlock(s, model, assets));
-  if (model.recommendations.length) {
-    children.push(heading("Recommandations", HeadingLevel.HEADING_2));
-    for (const r of model.recommendations) {
-      children.push(
-        new Paragraph({ spacing: { after: 120 }, children: [new TextRun(t(r))] }),
-      );
-    }
+  children.push(heading("Introduction", HeadingLevel.HEADING_2), ...richParagraphs(model.intro));
+  children.push(heading("Objectif", HeadingLevel.HEADING_2), ...richParagraphs(model.objective));
+  for (const s of model.schools) children.push(...schoolBlock(s, model, assets));
+  if (model.recommendations) {
+    children.push(heading("Recommandations", HeadingLevel.HEADING_2), ...richParagraphs(model.recommendations));
   }
-  children.push(
-    heading("Conclusion", HeadingLevel.HEADING_2),
-    new Paragraph(t(model.conclusion)),
-  );
+  children.push(heading("Conclusion", HeadingLevel.HEADING_2), ...richParagraphs(model.conclusion));
 
   const doc = new Document({
     creator: "Compagnie des sapeurs-pompiers Moncor",
@@ -239,7 +257,19 @@ export async function renderDocx(
     numbering: {
       config: [
         {
-          reference: "reco",
+          reference: "bullets",
+          levels: [
+            {
+              level: 0,
+              format: LevelFormat.BULLET,
+              text: "\u2022",
+              alignment: AlignmentType.START,
+              style: { paragraph: { indent: { left: 400, hanging: 260 } } },
+            },
+          ],
+        },
+        {
+          reference: "numbers",
           levels: [
             {
               level: 0,
