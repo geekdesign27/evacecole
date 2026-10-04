@@ -19,7 +19,14 @@ et n'est jamais écrit dans le dépôt.
   Les fichiers exportés sont dans `test-results/exports/`, les captures dans `test-results/screens/`.
   Cible par défaut : http://localhost:5180 (variable `E2E_BASE_URL` pour une autre cible, `E2E_TEAM_CODE` pour le code).
 
+- `e2e/a11y.spec.ts` : axe (WCAG 2 AA) sur l'écran exercice, rôles interpellateur et observateur.
+- Test de fumée en production (lecture seule) :
+  `E2E_BASE_URL=https://geekdesign27.github.io/evacecole/ npx playwright test e2e/prod-smoke.spec.ts`
+
 ## Déploiement
+
+URL : https://geekdesign27.github.io/evacecole/ (Convex production : `grandiose-axolotl-578`, région eu-west-1).
+
 
 Push sur `main` : GitHub Actions lance les tests, `npx convex deploy` (secret `CONVEX_DEPLOY_KEY`), build Vite
 avec l'URL Convex de production, publication GitHub Pages (`base` = `/evacecole/`).
