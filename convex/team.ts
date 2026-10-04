@@ -30,7 +30,11 @@ export const shareCode = query({
     await assertTeam(ctx, code);
     const today = zurichToday();
     const all = await ctx.db.query("accessCodes").collect();
-    const active = all.filter((c) => !c.revoked && c.validDate === today).sort((a, b) => b.createdAt - a.createdAt);
-    return active[0]?.code ?? null;
+    const active = all
+      .filter((c) => !c.revoked && c.validDate === today)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    // A day-code holder shares its own code, so revoking it cannot be dodged through a newer one.
+    const own = active.find((c) => c.code === code.trim().toLowerCase());
+    return own?.code ?? active[0]?.code ?? null;
   },
 });

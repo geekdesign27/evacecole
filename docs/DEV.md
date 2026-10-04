@@ -18,7 +18,7 @@ et n'est jamais écrit dans le dépôt.
   jamais le code permanent.
 - **`TEAM_CODE`** (variable d'environnement Convex) : code permanent de secours, réservé à l'admin.
 - **Admin** : identifiant `ADMIN_USER` (par défaut `schutz.pa`), mot de passe `ADMIN_PASSWORD`, tous deux en
-  variables d'environnement Convex. Session de 30 jours, verrouillage 10 min après 5 échecs.
+  variables d'environnement Convex. Session de 7 jours, après 5 échecs, les essais faux sont refusés 10 min, mais le bon mot de passe passe toujours (pas de blocage de l'admin par un tiers) : la protection repose sur un ADMIN_PASSWORD long.
 - Mot de passe admin du déploiement **dev** pour les tests : `test-admin-dev-2026` (jamais en production).
 
 ## Tests

@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { assertAdmin, zurichToday } from "./lib";
 
-const SESSION_MS = 30 * 24 * 3600 * 1000;
+const SESSION_MS = 7 * 24 * 3600 * 1000;
 const MAX_FAILURES = 5;
 const LOCK_MS = 10 * 60 * 1000;
 // No ambiguous characters (0/o, 1/l/i), easy to read aloud if the QR code fails.
@@ -37,17 +37,19 @@ export const login = mutation({
 
     const now = Date.now();
     const guard = await ctx.db.query("adminGuard").first();
-    if (guard && guard.lockedUntil > now) {
+    // The right credentials always open the session: a stranger typing wrong passwords on the
+    // public page must not lock the admin out. Protection against guessing rests on a long
+    // ADMIN_PASSWORD (16+ characters); the lock only slows down wrong attempts.
+    const good =
+      safeEqual(user.trim().toLowerCase(), expectedUser) &&
+      safeEqual(password, expectedPassword);
+    if (!good && guard && guard.lockedUntil > now) {
       const min = Math.ceil((guard.lockedUntil - now) / 60000);
       return {
         ok: false as const,
         error: `Trop d'essais. Réessaie dans ${min} min.`,
       };
     }
-
-    const good =
-      safeEqual(user.trim().toLowerCase(), expectedUser) &&
-      safeEqual(password, expectedPassword);
     if (!good) {
       const failures = (guard?.failures ?? 0) + 1;
       const lockedUntil = failures >= MAX_FAILURES ? now + LOCK_MS : 0;
