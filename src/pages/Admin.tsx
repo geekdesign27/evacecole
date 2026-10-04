@@ -14,6 +14,7 @@ import {
   Spinner,
   TopBar,
 } from "../components/ui";
+import { errorMessage } from "../lib/errors";
 
 const TOKEN_KEY = "evac:admin";
 
@@ -119,7 +120,7 @@ function Login({ onLogged }: { onLogged: (token: string) => void }) {
                 else setError(res.error);
               } catch (err) {
                 setError(
-                  err instanceof Error ? err.message : "Connexion impossible.",
+                  errorMessage(err, "Connexion impossible."),
                 );
               } finally {
                 setBusy(false);
@@ -219,7 +220,7 @@ function Codes({ token }: { token: string }) {
               setCustom("");
               setShown(c);
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Création impossible.");
+              setError(errorMessage(e, "Création impossible."));
             }
           }}
         >
@@ -397,7 +398,7 @@ function Participants({ token }: { token: string }) {
       );
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ajout impossible.");
+      setError(errorMessage(e, "Ajout impossible."));
       return false;
     }
   }

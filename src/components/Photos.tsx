@@ -5,6 +5,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { resizeToJpeg } from "../lib/images";
 import { device } from "../lib/storage";
 import { Button } from "./ui";
+import { errorMessage } from "../lib/errors";
 
 // Object URLs of photos taken on this device, so thumbnails show before the server URL arrives.
 const localPreviews = new Map<string, string>();
@@ -62,7 +63,7 @@ export function PhotoButton({
     } catch (e) {
       setError(
         navigator.onLine
-          ? `Photo non envoyée : ${e instanceof Error ? e.message : "erreur inconnue"}`
+          ? `Photo non envoyée : ${errorMessage(e, "erreur inconnue")}`
           : "Pas de réseau : la photo n'a pas pu être envoyée. Réessaie plus tard.",
       );
     } finally {

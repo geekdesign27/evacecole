@@ -7,6 +7,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { AnswerValue, Role, TimeField } from "../domain/checklist";
 import { device, readJSON, writeJSON } from "./storage";
+import { errorMessage } from "./errors";
 
 export interface DraftPhoto {
   storageId: Id<"_storage">;
@@ -104,7 +105,7 @@ export function useObservationDraft(exerciseId: Id<"exercises">, code: string) {
       const now = latest.current;
       if (now) persist({ ...now, syncedAt: d.updatedAt });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e, "Synchronisation impossible, nouvel essai automatique."));
     } finally {
       inflight.current = false;
     }

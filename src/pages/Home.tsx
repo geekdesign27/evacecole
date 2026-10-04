@@ -7,6 +7,7 @@ import { useTeam } from "../lib/team";
 import { fmtDateLong, fmtDuration, fmtTime, todayIso } from "../domain/format";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 import { useNow } from "../components/Stopwatch";
+import { errorMessage } from "../lib/errors";
 
 const OTHER = "__other__";
 
@@ -71,7 +72,7 @@ function NewExercise() {
       const id = await create({ code, school, exDate: todayIso() });
       navigate(`/x/${id}?lead=1`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Création impossible.");
+      setError(errorMessage(e, "Création impossible."));
       setBusy(false);
     }
   }

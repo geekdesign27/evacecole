@@ -14,6 +14,7 @@ import { typo } from "../lib/typo";
 import { useTeam } from "../lib/team";
 import { downloadBlob, loadAssets } from "../export/assets";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
+import { errorMessage } from "../lib/errors";
 
 
 /** Report of one school. */
@@ -171,7 +172,7 @@ function ReportEditor({
       (e) => {
         // Keep the text so the next edit or flush retries it.
         pending.current = { ...payload, ...pending.current };
-        setSaveError(e instanceof Error ? e.message : "Enregistrement impossible.");
+        setSaveError(errorMessage(e, "Enregistrement impossible."));
       },
     );
   };
@@ -358,7 +359,7 @@ function ExportBar({ model, label }: { model: ReportModel; label: string }) {
       downloadBlob(blob, reportFileName(model.exDate, label, kind));
     } catch (e) {
       setError(
-        `Export impossible : ${e instanceof Error ? e.message : "erreur inconnue"}`,
+        `Export impossible : ${errorMessage(e, "erreur inconnue")}`,
       );
     } finally {
       setBusy(null);

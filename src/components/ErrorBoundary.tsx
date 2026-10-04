@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { isRefusedCode } from "../lib/errors";
 
 /** Last resort: a server refusal (e.g. revoked code) must never leave a blank screen. */
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -10,7 +11,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
 
   render() {
     if (!this.state.error) return this.props.children;
-    const refused = /code d'équipe|révoqué/i.test(this.state.error.message);
+    const refused = isRefusedCode(this.state.error);
     return (
       <main className="mx-auto flex max-w-md flex-col gap-4 p-4">
         <p className="rounded-xl border-2 border-brand bg-brand-soft p-3 text-brand-dark" role="alert">

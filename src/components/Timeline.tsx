@@ -10,6 +10,7 @@ import {
 } from "../domain/checklist";
 import { fmtClock } from "../domain/format";
 import { Button, Card, ErrorBox } from "./ui";
+import { errorMessage } from "../lib/errors";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -148,7 +149,7 @@ function TimeEditor({
       });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Enregistrement impossible.");
+      setError(errorMessage(e, "Enregistrement impossible."));
     }
   }
 
