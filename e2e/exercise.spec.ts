@@ -56,6 +56,7 @@ test("full exercise with three phones, offline safety and both exports", async (
   const joinStart = Date.now();
   const obs1 = await newPhone();
   await obs1.goto(`./#/x/${exId}?k=${CODE}`);
+  await expect(obs1).not.toHaveURL(/k=/); // team code removed from the address bar
   await join(obs1, "Anne Dupont", "1er étage");
   await expect(obs1.getByText("Interpellation depuis")).toBeVisible();
   expect(Date.now() - joinStart).toBeLessThan(20_000);
