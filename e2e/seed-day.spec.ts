@@ -4,6 +4,8 @@ import { fmtDateLong, todayIso } from "../src/domain/format";
 
 // Seeds a full fake morning (4 schools) on the DEV deployment, then exports the day report.
 // Run on demand: SEED=1 npx playwright test e2e/seed-day.spec.ts
+// On production (adds 4 exercises dated today, deletes nothing):
+//   E2E_BASE_URL=https://geekdesign27.github.io/evacecole/ E2E_TEAM_CODE=<code du jour> SEED=1 npx playwright test e2e/seed-day.spec.ts
 const CODE = process.env.E2E_TEAM_CODE ?? "test-moncor";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "test-admin-dev-2026";
 const OUT = "test-results/seed";
@@ -128,7 +130,9 @@ test("seed a fake morning of 4 schools and export the day report", async ({ brow
   test.setTimeout(600_000);
   mkdirSync(OUT, { recursive: true });
 
-  // 1. Clean today's test exercises on the dev deployment
+  // 1. Clean today's test exercises, on the dev deployment only (never on production)
+  const onDev = !process.env.E2E_BASE_URL;
+  if (onDev) {
   const admin = await phone(browser);
   await admin.goto("./#/admin");
   await admin.getByLabel("Mot de passe").fill(ADMIN_PASSWORD);
@@ -142,6 +146,7 @@ test("seed a fake morning of 4 schools and export the day report", async ({ brow
     if (!(await del.count())) break;
     await del.click();
     await admin.waitForTimeout(300);
+  }
   }
 
   // 2. One exercise per school, lead + observers on separate phones
