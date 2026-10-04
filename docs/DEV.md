@@ -46,6 +46,15 @@ Variable d'environnement Convex de production : `TEAM_CODE` (Dashboard Convex, S
 
 ## Écarts par rapport à la SPEC
 
+- **Structure du rapport (2026-10-04, demande de PA)** : les observations ne sont plus fusionnées point par point
+  (SPEC section 6). Elles sont présentées en blocs : « Personne interpellée », puis un bloc par zone, dans l'ordre
+  du bâtiment, avec les points cochés (Oui, Partiel, Non ; N/A omis), commentaires, remarques et photos de la zone.
+  Le bilan court et les suggestions de recommandations restent calculés sur l'ensemble de l'équipe.
+- **Recommandations** : texte libre de l'auteur. Les recommandations déduites des points Partiel/Non sont proposées
+  par le bouton « Insérer les suggestions ».
+- **Objectif** : section séparée et éditable sous l'introduction.
+- **Suppression d'exercice** : réservée à la page « Gestion », définitive (saisies et photos comprises).
+
 - Table `dayReports` ajoutée : textes éditables du rapport de journée (un rapport de journée n'appartient à aucun exercice).
 - `timingNotes` contient aussi des clés `<champ>__by` (« Prénom Nom, zone ») pour attribuer les notes d'horodatage.
 - `exercises.stamp` accepte `clientTs` : un appui fait hors ligne et livré plus de 15 s en retard garde l'heure du téléphone.

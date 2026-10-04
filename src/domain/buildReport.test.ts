@@ -219,29 +219,55 @@ describe("buildReport", () => {
     );
   });
 
-  it("merges recommendations without duplicates, in the reference order", () => {
-    expect(report.recommendations).toEqual(
-      RECOMMENDATIONS.filter((r) =>
-        ["formation", "portes", "calage"].includes(r.key),
-      ).map((r) => r.text),
+  it("suggests recommendations without duplicates, in the reference order, but prints only free text", () => {
+    expect(report.suggestedRecommendations).toEqual(
+      RECOMMENDATIONS.filter((r) => ["formation", "portes", "calage"].includes(r.key)).map((r) => r.text),
     );
+    expect(report.recommendations).toEqual([]);
+    expect(report.objective).toContain("Vérifier la réaction du personnel");
+    expect(report.intro).not.toContain("Objectif");
   });
 
-  it("attributes every remark and photo", () => {
-    expect(school.remarks).toEqual([
-      "Alarme pompiers : bouton défectueux, alarme en porte-à-porte (PA Schütz, Rez)",
-      "WC du 1er non contrôlés. (Anne Dupont, 1er étage)",
+  it("starts with the interpellated person, then one block per zone in building order", () => {
+    expect(school.blocks.map((b) => b.title)).toEqual(["Personne interpellée", "Rez", "1er étage"]);
+    const [leadBlock, rez, first] = school.blocks;
+    expect(leadBlock.observers).toBe("Observé par PA Schütz");
+    expect(leadBlock.groups.map((g) => g.title)).toEqual(["Réaction de la personne interpellée", "Organisation et matériel"]);
+    // N/A points are left out of the blocks
+    expect(JSON.stringify(leadBlock)).not.toContain("Local du sinistre");
+    expect(rez.groups[0].lines.map((l) => l.text)).toEqual(["Élèves calmes.", "Portes fermées.", "Plusieurs portes calées constatées."]);
+    expect(first.groups[0].lines.map((l) => l.text)).toEqual([
+      "Élèves calmes.",
+      "Quelques portes sont restées ouvertes.",
+      "Aucune porte calée.",
     ]);
-    expect(school.photos[0].caption).toBe(
-      "Aucune porte calée : Porte coupe-feu (Anne Dupont, 1er étage)",
+    expect(first.remarks).toEqual(["WC du 1er non contrôlés. (Anne Dupont, 1er étage)"]);
+    expect(first.photos[0].caption).toBe("Aucune porte calée : Porte coupe-feu (Anne Dupont, 1er étage)");
+    expect(rez.photos).toEqual([]);
+  });
+
+  it("keeps timing notes attributed", () => {
+    expect(school.timingNotes).toEqual(["Alarme pompiers : bouton défectueux, alarme en porte-à-porte (PA Schütz, Rez)"]);
+  });
+
+  it("merges two observers of the same zone by name", () => {
+    const r = buildReport(
+      [exercise],
+      [
+        obs({ observer: "Anne Dupont", zone: "Rez", answers: { o_doors: { v: "ok" } } }),
+        obs({ observer: "Luc Morel", zone: "Rez", answers: { o_doors: { v: "no" } } }),
+      ],
     );
+    const rez = r.schools[0].blocks[0];
+    expect(rez.observers).toBe("Observé par Anne Dupont et Luc Morel");
+    expect(rez.groups[0].lines[0].text).toBe("Plusieurs portes sont restées ouvertes (Luc Morel). En ordre : Anne Dupont.");
   });
 
   it("counts the missing points for the web preview only", () => {
     const missingIds = school.missing.map((m) => m.itemId);
     expect(missingIds).toContain("o_audible");
     expect(missingIds).not.toContain("l_closedoor");
-    const text = JSON.stringify(school.sections);
+    const text = JSON.stringify(school.blocks);
     expect(text).not.toContain("Alarme évacuation audible");
   });
 
@@ -256,7 +282,7 @@ describe("buildReport", () => {
       fields: { recommendations: "Premier point.\n\nDeuxième point." },
     });
     expect(r.recommendations).toEqual(["Premier point.", "Deuxième point."]);
-    expect(r.autoRecommendations.length).toBeGreaterThan(0);
+    expect(r.suggestedRecommendations.length).toBeGreaterThan(0);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   SECTIONS,
   TIME_FIELDS,
   TIME_REPORT_LABELS,
+  ZONES,
   type AnswerValue,
   type ChecklistItem,
   type RecoKey,
@@ -17,7 +18,6 @@ import {
   fmtDateLong,
   fmtDateShort,
   fmtDuration,
-  fmtDurationShort,
   fmtTime,
   withLocativeArticle,
 } from "./format";
@@ -63,8 +63,9 @@ export interface ReportFields {
   recipients?: string;
   author?: string;
   intro?: string;
+  objective?: string;
   conclusion?: string;
-  /** One recommendation per paragraph (blank line separated). Empty = automatic. */
+  /** Free text written by the report author, one paragraph per line. */
   recommendations?: string;
 }
 
@@ -73,23 +74,36 @@ export interface ReportLine {
   comments: string[];
 }
 
-export interface ReportSectionModel {
+export interface ReportPhoto {
+  url: string;
+  caption: string;
+}
+
+/** A titled group of sentences inside a block (e.g. « Technique »). */
+export interface ReportGroup {
   title: string;
   lines: ReportLine[];
 }
 
-export interface ReportPhoto {
-  url: string;
-  caption: string;
+/** One observation block: the interpellated person first, then one block per zone. */
+export interface ReportBlock {
+  title: string;
+  /** « Observé par … » */
+  observers: string;
+  groups: ReportGroup[];
+  remarks: string[];
+  photos: ReportPhoto[];
 }
 
 export interface SchoolReport {
   exerciseId: string;
   school: string;
   facts: { label: string; value: string }[];
+  /** Notes typed on the timeline (« Alarme pompiers : bouton défectueux… »). */
+  timingNotes: string[];
   summary: string;
-  sections: ReportSectionModel[];
-  remarks: string[];
+  blocks: ReportBlock[];
+  /** Every photo of the school, for export asset loading. */
   photos: ReportPhoto[];
   okCount: number;
   issueCount: number;
@@ -107,11 +121,13 @@ export interface ReportModel {
   recipients: string;
   author: string;
   intro: string;
+  objective: string;
   conclusion: string;
   schools: SchoolReport[];
+  /** Free text from the author; empty means no recommendation section. */
   recommendations: string[];
-  /** Automatic recommendations, kept to offer a reset after manual edits. */
-  autoRecommendations: string[];
+  /** Suggestions deduced from Partial/No answers, offered in the editor. */
+  suggestedRecommendations: string[];
   missingCount: number;
 }
 
@@ -122,18 +138,19 @@ export const DEFAULT_RECIPIENTS =
 export const DEFAULT_CONCLUSION =
   "Ces exercices restent le meilleur moyen de vérifier que chacun sait quoi faire le jour où l'alarme sonne pour de vrai. Nous remercions les directions, les enseignant·es et les élèves pour leur engagement.";
 
+export const DEFAULT_OBJECTIVE =
+  "Vérifier la réaction du personnel face à un début d'incendie, l'application de la procédure d'évacuation et le fonctionnement des installations d'alarme.";
+
 export function defaultIntro(
   mode: "school" | "day",
   exDate: string,
   schools: string[],
 ): string {
   const date = fmtDateLong(exDate);
-  const goal =
-    "Objectif : vérifier la réaction du personnel face à un début d'incendie, l'application de la procédure d'évacuation et le fonctionnement des installations d'alarme.";
   if (mode === "school" || schools.length <= 1) {
-    return `Le ${date}, la Compagnie des sapeurs-pompiers Moncor a conduit un exercice d'évacuation ${withLocativeArticle(schools[0] ?? "")}. ${goal} Une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
+    return `Le ${date}, la Compagnie des sapeurs-pompiers Moncor a conduit un exercice d'évacuation ${withLocativeArticle(schools[0] ?? "")}. Une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
   }
-  return `Le ${date}, la Compagnie des sapeurs-pompiers Moncor a conduit des exercices d'évacuation dans les établissements suivants : ${joinFr(schools)}. ${goal} Dans chaque établissement, une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
+  return `Le ${date}, la Compagnie des sapeurs-pompiers Moncor a conduit des exercices d'évacuation dans les établissements suivants : ${joinFr(schools)}. Dans chaque établissement, une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
 }
 
 /** « A, B et C » */
@@ -174,6 +191,7 @@ export interface ItemSynthesis {
 export function synthesizeItem(
   item: ChecklistItem,
   observations: ObservationInput[],
+  label: (o: ObservationInput) => string = zoneLabel,
 ): ItemSynthesis {
   const answered = observations.filter((o) => o.answers[item.id]?.v);
   const comments = observations
@@ -211,12 +229,12 @@ export function synthesizeItem(
   const parts: string[] = [];
   for (const v of ["no", "partial"] as const) {
     const zones = uniq(
-      real.filter((o) => o.answers[item.id]!.v === v).map(zoneLabel),
+      real.filter((o) => o.answers[item.id]!.v === v).map(label),
     );
     if (zones.length) parts.push(withZones(sentence(item, v), zones));
   }
   const okZones = uniq(
-    real.filter((o) => o.answers[item.id]!.v === "ok").map(zoneLabel),
+    real.filter((o) => o.answers[item.id]!.v === "ok").map(label),
   );
   if (okZones.length) parts.push(`En ordre : ${okZones.join(", ")}.`);
   return { line: { text: parts.join(" "), comments }, status: "issue" };
@@ -271,7 +289,7 @@ function buildSummary(
   const parts: string[] = [];
   if (ex.tEvac != null && ex.tPresent != null) {
     parts.push(
-      `Évacuation complète en ${fmtDurationShort(ex.tPresent - ex.tEvac)}.`,
+      `Évacuation complète en ${fmtDuration(ex.tPresent - ex.tEvac)}.`,
     );
   } else {
     parts.push("Durée d'évacuation non mesurée.");
@@ -284,19 +302,13 @@ function buildSummary(
   return parts.join(" ");
 }
 
-function buildRemarks(ex: ExerciseInput, obs: ObservationInput[]): string[] {
+function buildTimingNotes(ex: ExerciseInput): string[] {
   const out: string[] = [];
   for (const f of TIME_FIELDS) {
     const note = ex.timingNotes[f]?.trim();
     if (!note) continue;
     const by = ex.timingNotes[`${f}__by`]?.trim();
-    out.push(
-      `${TIME_REPORT_LABELS[f as TimeField]} : ${note}${by ? ` (${by})` : ""}`,
-    );
-  }
-  for (const o of obs) {
-    const r = o.remarks?.trim();
-    if (r) out.push(`${r} ${attribution(o)}`);
+    out.push(`${TIME_REPORT_LABELS[f as TimeField]} : ${note}${by ? ` (${by})` : ""}`);
   }
   return out;
 }
@@ -307,8 +319,7 @@ function buildPhotos(obs: ObservationInput[]): ReportPhoto[] {
     for (const p of o.photos) {
       if (!p.url) continue;
       const parts: string[] = [];
-      if (p.itemId && ITEM_BY_ID[p.itemId])
-        parts.push(ITEM_BY_ID[p.itemId].label);
+      if (p.itemId && ITEM_BY_ID[p.itemId]) parts.push(ITEM_BY_ID[p.itemId].label);
       if (p.caption?.trim()) parts.push(p.caption.trim());
       const head = parts.join(" : ") || "Vue générale";
       out.push({ url: p.url, caption: `${head} ${attribution(o)}` });
@@ -317,20 +328,64 @@ function buildPhotos(obs: ObservationInput[]): ReportPhoto[] {
   return out;
 }
 
-export function buildSchoolReport(
-  ex: ExerciseInput,
-  allObs: ObservationInput[],
-): SchoolReport {
+const observerName = (o: ObservationInput) => o.observer.trim() || "Observateur·rice";
+
+/** Answered points of one role for a group of observations (N/A and blanks left out). */
+function blockGroups(role: Role, obs: ObservationInput[]): ReportGroup[] {
+  const groups: ReportGroup[] = [];
+  for (const section of SECTIONS.filter((x) => x.role === role)) {
+    const lines: ReportLine[] = [];
+    for (const item of section.items) {
+      const syn = synthesizeItem(item, obs, observerName);
+      if (syn.line && syn.status !== "missing" && syn.status !== "na") lines.push(syn.line);
+    }
+    if (lines.length) groups.push({ title: section.title, lines });
+  }
+  return groups;
+}
+
+function buildBlock(title: string, role: Role, obs: ObservationInput[]): ReportBlock {
+  return {
+    title,
+    observers: `Observé par ${joinFr(uniq(obs.map(observerName)))}`,
+    groups: blockGroups(role, obs),
+    remarks: obs.filter((o) => o.remarks?.trim()).map((o) => `${o.remarks!.trim()} ${attribution(o)}`),
+    photos: buildPhotos(obs),
+  };
+}
+
+function zoneOrder(zone: string): number {
+  const i = ZONES.indexOf(zone);
+  return i === -1 ? ZONES.length : i;
+}
+
+function buildBlocks(obs: ObservationInput[]): ReportBlock[] {
+  const blocks: ReportBlock[] = [];
+  const leads = obs.filter((o) => o.role === "lead");
+  if (leads.length) blocks.push(buildBlock("Personne interpellée", "lead", leads));
+
+  const byZone = new Map<string, ObservationInput[]>();
+  for (const o of obs.filter((x) => x.role === "obs")) {
+    const key = o.zone?.trim() || `Zone de ${observerName(o)}`;
+    byZone.set(key, [...(byZone.get(key) ?? []), o]);
+  }
+  const zones = [...byZone.keys()].sort((a, b) => zoneOrder(a) - zoneOrder(b) || a.localeCompare(b, "fr"));
+  for (const z of zones) blocks.push(buildBlock(z, "obs", byZone.get(z)!));
+
+  // A block with nothing in it would only print a title.
+  return blocks.filter((b) => b.groups.length || b.remarks.length || b.photos.length);
+}
+
+export function buildSchoolReport(ex: ExerciseInput, allObs: ObservationInput[]): SchoolReport {
   const obs = allObs.filter((o) => o.exerciseId === ex._id);
   let okCount = 0;
   let issueCount = 0;
   const missing: SchoolReport["missing"] = [];
   const recoKeys = new Set<RecoKey>();
-  const sections: ReportSectionModel[] = [];
 
+  // Counts and suggestions use the whole team's answers per point.
   for (const section of SECTIONS) {
     const roleObs = obs.filter((o) => o.role === section.role);
-    const lines: ReportLine[] = [];
     for (const item of section.items) {
       const syn = synthesizeItem(item, roleObs);
       if (syn.status === "ok") okCount++;
@@ -338,25 +393,19 @@ export function buildSchoolReport(
         issueCount++;
         if (item.reco) recoKeys.add(item.reco);
       }
-      if (syn.status === "missing")
-        missing.push({
-          itemId: item.id,
-          label: item.label,
-          role: section.role,
-        });
-      if (syn.line) lines.push(syn.line);
+      if (syn.status === "missing") missing.push({ itemId: item.id, label: item.label, role: section.role });
     }
-    if (lines.length) sections.push({ title: section.title, lines });
   }
 
+  const blocks = buildBlocks(obs);
   return {
     exerciseId: ex._id,
     school: ex.school,
     facts: buildFacts(ex),
+    timingNotes: buildTimingNotes(ex),
     summary: buildSummary(ex, okCount, issueCount),
-    sections,
-    remarks: buildRemarks(ex, obs),
-    photos: buildPhotos(obs),
+    blocks,
+    photos: blocks.flatMap((b) => b.photos),
     okCount,
     issueCount,
     missing,
@@ -387,10 +436,7 @@ export function buildReport(
   const schoolNames = sorted.map((e) => e.school);
 
   const recoKeys = new Set(schools.flatMap((s) => s.recoKeys));
-  const autoRecommendations = RECOMMENDATIONS.filter((r) =>
-    recoKeys.has(r.key),
-  ).map((r) => r.text);
-  const manual = fields.recommendations?.trim();
+  const suggestedRecommendations = RECOMMENDATIONS.filter((r) => recoKeys.has(r.key)).map((r) => r.text);
 
   const title =
     mode === "school"
@@ -408,10 +454,11 @@ export function buildReport(
     intro:
       fields.intro?.trim() ||
       (exDate ? defaultIntro(mode, exDate, schoolNames) : ""),
+    objective: fields.objective?.trim() || DEFAULT_OBJECTIVE,
     conclusion: fields.conclusion?.trim() || DEFAULT_CONCLUSION,
     schools,
-    recommendations: manual ? splitParagraphs(manual) : autoRecommendations,
-    autoRecommendations,
+    recommendations: splitParagraphs(fields.recommendations ?? ""),
+    suggestedRecommendations,
     missingCount: schools.reduce((n, s) => n + s.missing.length, 0),
   };
 }

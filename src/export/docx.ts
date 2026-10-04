@@ -17,7 +17,7 @@ import {
   WidthType,
   type FileChild,
 } from "docx";
-import type { ReportModel, SchoolReport } from "../domain/buildReport";
+import type { ReportBlock, ReportLine, ReportModel, SchoolReport } from "../domain/buildReport";
 import { dataUrlToBytes, type RasterImage } from "../lib/images";
 import { typo } from "../lib/typo";
 import { FOOTER_TEXT, type ExportAssets } from "./assets";
@@ -96,61 +96,47 @@ function image(
   });
 }
 
-function schoolBlock(
-  s: SchoolReport,
-  model: ReportModel,
-  assets: ExportAssets,
-): FileChild[] {
-  const out: FileChild[] = [];
-  if (model.mode === "day") out.push(heading(s.school, HeadingLevel.HEADING_2));
-  out.push(kvTable(s.facts));
-  out.push(
-    new Paragraph({
-      spacing: { before: 160 },
-      children: [new TextRun({ text: t(s.summary), bold: true })],
-    }),
-  );
-  if (s.sections.length)
-    out.push(heading("Observations", HeadingLevel.HEADING_3));
-  for (const sec of s.sections) {
-    out.push(heading(sec.title, HeadingLevel.HEADING_4));
-    for (const line of sec.lines) {
-      out.push(new Paragraph(t(line.text)));
-      for (const c of line.comments) {
-        out.push(
-          new Paragraph({
-            indent: { left: 360 },
-            children: [
-              new TextRun({ text: t(c), italics: true, color: MUTED }),
-            ],
-          }),
-        );
-      }
-    }
+function lineParagraphs(line: ReportLine): Paragraph[] {
+  return [
+    new Paragraph(t(line.text)),
+    ...line.comments.map(
+      (c) => new Paragraph({ indent: { left: 360 }, children: [new TextRun({ text: t(c), italics: true, color: MUTED })] }),
+    ),
+  ];
+}
+
+function blockParagraphs(b: ReportBlock, assets: ExportAssets): FileChild[] {
+  const out: FileChild[] = [heading(b.title, HeadingLevel.HEADING_3)];
+  out.push(new Paragraph({ keepNext: true, children: [new TextRun({ text: t(b.observers), size: 18, color: MUTED })] }));
+  for (const g of b.groups) {
+    out.push(heading(g.title, HeadingLevel.HEADING_4));
+    for (const line of g.lines) out.push(...lineParagraphs(line));
   }
-  if (s.remarks.length) {
+  if (b.remarks.length) {
     out.push(heading("Remarques", HeadingLevel.HEADING_4));
-    for (const r of s.remarks) out.push(new Paragraph(t(r)));
+    for (const r of b.remarks) out.push(new Paragraph(t(r)));
   }
-  const photos = s.photos.filter((p) => assets.photos.has(p.url));
+  const photos = b.photos.filter((p) => assets.photos.has(p.url));
   if (photos.length) {
     out.push(heading("Photos", HeadingLevel.HEADING_4));
     for (const p of photos) {
-      out.push(
-        new Paragraph({
-          keepNext: true,
-          children: [image(assets.photos.get(p.url)!, 300, 225, "jpg")],
-        }),
-      );
-      out.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: t(p.caption), size: 18, color: MUTED }),
-          ],
-        }),
-      );
+      out.push(new Paragraph({ keepNext: true, children: [image(assets.photos.get(p.url)!, 300, 225, "jpg")] }));
+      out.push(new Paragraph({ children: [new TextRun({ text: t(p.caption), size: 18, color: MUTED })] }));
     }
   }
+  return out;
+}
+
+function schoolBlock(s: SchoolReport, model: ReportModel, assets: ExportAssets): FileChild[] {
+  const out: FileChild[] = [];
+  out.push(heading(model.mode === "day" ? s.school : "Déroulement", HeadingLevel.HEADING_2));
+  out.push(kvTable(s.facts));
+  for (const n of s.timingNotes) {
+    out.push(new Paragraph({ children: [new TextRun({ text: t(n), size: 19, color: MUTED })] }));
+  }
+  out.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: t(s.summary), bold: true })] }));
+  if (s.blocks.length) out.push(heading("Observations", HeadingLevel.HEADING_2));
+  for (const b of s.blocks) out.push(...blockParagraphs(b, assets));
   return out;
 }
 
@@ -185,6 +171,8 @@ export async function renderDocx(
   children.push(
     heading("Introduction", HeadingLevel.HEADING_2),
     new Paragraph(t(model.intro)),
+    heading("Objectif", HeadingLevel.HEADING_2),
+    new Paragraph(t(model.objective)),
   );
   for (const s of model.schools)
     children.push(...schoolBlock(s, model, assets));
@@ -192,10 +180,7 @@ export async function renderDocx(
     children.push(heading("Recommandations", HeadingLevel.HEADING_2));
     for (const r of model.recommendations) {
       children.push(
-        new Paragraph({
-          numbering: { reference: "reco", level: 0 },
-          children: [new TextRun(t(r))],
-        }),
+        new Paragraph({ spacing: { after: 120 }, children: [new TextRun(t(r))] }),
       );
     }
   }
@@ -237,7 +222,7 @@ export async function renderDocx(
           basedOn: "Normal",
           next: "Normal",
           quickFormat: true,
-          run: { font: "Arial", size: 24, bold: true },
+          run: { font: "Arial", size: 26, bold: true, color: "9E1414" },
           paragraph: { spacing: { before: 200, after: 80 }, keepNext: true },
         },
         {

@@ -91,6 +91,7 @@ export function AdminPage() {
         <Codes token={token} />
         <Participants token={token} />
         <Schools token={token} />
+        <Exercises token={token} />
       </main>
     </>
   );
@@ -645,6 +646,53 @@ function Schools({ token }: { token: string }) {
       >
         Ajouter
       </Button>
+    </Card>
+  );
+}
+
+function Exercises({ token }: { token: string }) {
+  const list = useQuery(api.admin.exercises, { token });
+  const remove = useMutation(api.admin.deleteExercise);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-xl font-bold">Exercices</h2>
+      <p className="mb-3 text-sm text-muted">
+        Supprimer efface définitivement l'exercice, toutes les saisies et les photos. Pour seulement le masquer, archive-le.
+      </p>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      {list === undefined ? (
+        <Spinner />
+      ) : (
+        <ul className="flex flex-col">
+          {list.length === 0 && <li className="text-muted">Aucun exercice.</li>}
+          {list.map((ex) => (
+            <li key={ex._id} className="flex min-h-12 items-center justify-between gap-2 border-b border-line py-1 last:border-0">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{ex.school}</p>
+                <p className="text-sm text-muted">{fmtDateLong(ex.exDate)}</p>
+              </div>
+              <Button
+                variant="secondary"
+                className="shrink-0 text-brand"
+                aria-label={`Supprimer l'exercice ${ex.school} du ${fmtDateLong(ex.exDate)}`}
+                onClick={async () => {
+                  if (!window.confirm(`Supprimer définitivement « ${ex.school} » (${fmtDateLong(ex.exDate)}) et toutes ses saisies ?`)) return;
+                  setError(null);
+                  try {
+                    await remove({ token, id: ex._id });
+                  } catch (e) {
+                    setError(errorMessage(e, "Suppression impossible."));
+                  }
+                }}
+              >
+                Supprimer
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

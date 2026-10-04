@@ -281,3 +281,33 @@ export const removeSchool = mutation({
     await ctx.db.delete(id);
   },
 });
+
+// Exercises
+
+export const exercises = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    await assertAdmin(ctx, token);
+    return await ctx.db.query("exercises").withIndex("by_date").order("desc").take(300);
+  },
+});
+
+/** Permanent deletion: the exercise, its observations and their photos. */
+export const deleteExercise = mutation({
+  args: { token: v.string(), id: v.id("exercises") },
+  handler: async (ctx, { token, id }) => {
+    await assertAdmin(ctx, token);
+    const observations = await ctx.db
+      .query("observations")
+      .withIndex("by_exercise", (q) => q.eq("exerciseId", id))
+      .collect();
+    for (const o of observations) {
+      for (const p of o.photos) {
+        // A photo may already be gone; deletion must still go through.
+        await ctx.storage.delete(p.storageId).catch(() => {});
+      }
+      await ctx.db.delete(o._id);
+    }
+    await ctx.db.delete(id);
+  },
+});

@@ -55,7 +55,8 @@ export const setTime = mutation({
     code: v.string(),
     id: v.id("exercises"),
     field: timeField,
-    value: v.union(v.number(), v.null()),
+    // number = set, null = clear, omitted = keep the current time (note-only edit)
+    value: v.optional(v.union(v.number(), v.null())),
     note: v.optional(v.string()),
     noteBy: v.optional(v.string()), // « Prénom Nom, zone » for report attribution
   },
@@ -63,7 +64,7 @@ export const setTime = mutation({
     await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
-    const patch: Record<string, unknown> = { [field]: value ?? undefined };
+    const patch: Record<string, unknown> = value === undefined ? {} : { [field]: value ?? undefined };
     if (note !== undefined) {
       const timingNotes = { ...ex.timingNotes };
       if (note.trim()) {

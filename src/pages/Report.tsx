@@ -151,7 +151,7 @@ function ReportEditor({
   // Show the computed defaults in the editors when nothing has been typed yet.
   const shown = (k: keyof ReportFields): string => {
     if (fields[k] !== undefined && fields[k] !== "") return fields[k] as string;
-    if (k === "recommendations") return model.autoRecommendations.join("\n\n");
+    if (k === "recommendations") return "";
     return (model[k as keyof ReportModel] as string) ?? "";
   };
 
@@ -269,18 +269,28 @@ function ReportEditor({
             onChange={(v) => edit("intro", v)}
           />
           <Field
-            label="Recommandations (une par paragraphe)"
+            label="Objectif"
+            rows={3}
+            value={shown("objective")}
+            onChange={(v) => edit("objective", v)}
+          />
+          <Field
+            label="Recommandations (texte libre, une par paragraphe)"
             rows={8}
             value={shown("recommendations")}
             onChange={(v) => edit("recommendations", v)}
           />
-          {fields.recommendations && (
+          {model.suggestedRecommendations.length > 0 && (
             <Button
-              variant="ghost"
-              className="self-start underline"
-              onClick={() => edit("recommendations", "")}
+              variant="secondary"
+              className="self-start"
+              onClick={() => {
+                const current = (fields.recommendations ?? "").trim();
+                const extra = model.suggestedRecommendations.filter((r) => !current.includes(r));
+                edit("recommendations", [current, ...extra].filter(Boolean).join("\n\n"));
+              }}
             >
-              Revenir aux recommandations automatiques
+              Insérer les suggestions ({model.suggestedRecommendations.length})
             </Button>
           )}
           <Field
@@ -417,12 +427,14 @@ function Preview({ model }: { model: ReportModel }) {
       </dl>
       <h3 className="mt-4 text-lg font-bold text-brand">Introduction</h3>
       <p>{t(model.intro)}</p>
+      <h3 className="mt-4 text-lg font-bold text-brand">Objectif</h3>
+      <p>{t(model.objective)}</p>
 
       {model.schools.map((s) => (
         <section key={s.exerciseId} className="mt-4">
-          {model.mode === "day" && (
-            <h3 className="text-lg font-bold text-brand">{t(s.school)}</h3>
-          )}
+          <h3 className="mt-4 text-lg font-bold text-brand">
+            {model.mode === "day" ? t(s.school) : "Déroulement"}
+          </h3>
           <table className="my-2 w-full border-collapse text-[15px]">
             <tbody>
               {s.facts.map((f) => (
@@ -436,62 +448,65 @@ function Preview({ model }: { model: ReportModel }) {
             </tbody>
           </table>
           <p className="font-bold">{t(s.summary)}</p>
-          {s.sections.length > 0 && (
-            <h4 className="mt-3 font-bold">Observations</h4>
-          )}
-          {s.sections.map((sec) => (
-            <div key={sec.title} className="mt-2">
-              <h5 className="font-bold">{t(sec.title)}</h5>
-              {sec.lines.map((l, i) => (
-                <div key={i}>
-                  <p>{t(l.text)}</p>
-                  {l.comments.map((c, j) => (
-                    <p key={j} className="ml-4 italic text-muted">
-                      {t(c)}
-                    </p>
+          {s.timingNotes.map((n, i) => (
+            <p key={i} className="text-sm text-muted">
+              {t(n)}
+            </p>
+          ))}
+          {s.blocks.length > 0 && <h3 className="mt-4 text-lg font-bold text-brand">Observations</h3>}
+          {s.blocks.map((b) => (
+            <div key={b.title} className="mt-3">
+              <h4 className="text-[17px] font-bold">{t(b.title)}</h4>
+              <p className="text-sm text-muted">{t(b.observers)}</p>
+              {b.groups.map((g) => (
+                <div key={g.title} className="mt-1">
+                  <h5 className="font-medium underline">{t(g.title)}</h5>
+                  {g.lines.map((l, i) => (
+                    <div key={i}>
+                      <p>{t(l.text)}</p>
+                      {l.comments.map((c, j) => (
+                        <p key={j} className="ml-4 italic text-muted">
+                          {t(c)}
+                        </p>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ))}
+              {b.remarks.length > 0 && (
+                <div className="mt-1">
+                  <h5 className="font-medium underline">Remarques</h5>
+                  {b.remarks.map((r, i) => (
+                    <p key={i}>{t(r)}</p>
+                  ))}
+                </div>
+              )}
+              {b.photos.length > 0 && (
+                <div className="mt-1">
+                  <h5 className="font-medium underline">Photos</h5>
+                  <div className="grid grid-cols-2 gap-3">
+                    {b.photos.map((p) => (
+                      <figure key={p.url}>
+                        <img src={p.url} alt={p.caption} className="w-full rounded-lg" />
+                        <figcaption className="text-sm text-muted">{t(p.caption)}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
-          {s.remarks.length > 0 && (
-            <div className="mt-2">
-              <h5 className="font-bold">Remarques</h5>
-              {s.remarks.map((r, i) => (
-                <p key={i}>{t(r)}</p>
-              ))}
-            </div>
-          )}
-          {s.photos.length > 0 && (
-            <div className="mt-2">
-              <h5 className="font-bold">Photos</h5>
-              <div className="grid grid-cols-2 gap-3">
-                {s.photos.map((p) => (
-                  <figure key={p.url}>
-                    <img
-                      src={p.url}
-                      alt={p.caption}
-                      className="w-full rounded-lg"
-                    />
-                    <figcaption className="text-sm text-muted">
-                      {t(p.caption)}
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
       ))}
 
       {model.recommendations.length > 0 && (
         <>
           <h3 className="mt-4 text-lg font-bold text-brand">Recommandations</h3>
-          <ol className="ml-5 list-decimal">
-            {model.recommendations.map((r, i) => (
-              <li key={i}>{t(r)}</li>
-            ))}
-          </ol>
+          {model.recommendations.map((r, i) => (
+            <p key={i} className="mb-2">
+              {t(r)}
+            </p>
+          ))}
         </>
       )}
       <h3 className="mt-4 text-lg font-bold text-brand">Conclusion</h3>
