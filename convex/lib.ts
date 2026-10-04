@@ -1,10 +1,41 @@
 import { ConvexError } from "convex/values";
+import type { QueryCtx } from "./_generated/server";
 
-/** Every public function takes the team code and checks it server-side. */
-export function assertTeam(code: string) {
-  const expected = process.env.TEAM_CODE;
-  if (!expected) throw new ConvexError("TEAM_CODE non configuré sur le serveur.");
-  if (code.trim().toLowerCase() !== expected.trim().toLowerCase()) {
-    throw new ConvexError("Code d'équipe incorrect.");
-  }
+const norm = (s: string) => s.trim().toLowerCase();
+
+/** Today's date in Switzerland (YYYY-MM-DD); day codes are valid on that date only. */
+export function zurichToday(now = Date.now()): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Zurich" }).format(new Date(now));
+}
+
+/**
+ * Accepted codes: the permanent TEAM_CODE (admin fallback, Convex env) or a day code
+ * created in the admin page, not revoked and valid today.
+ */
+export async function isValidCode(ctx: QueryCtx, code: string): Promise<boolean> {
+  const c = norm(code);
+  if (!c) return false;
+  const permanent = process.env.TEAM_CODE;
+  if (permanent && c === norm(permanent)) return true;
+  const day = await ctx.db
+    .query("accessCodes")
+    .withIndex("by_code", (q) => q.eq("code", c))
+    .first();
+  return !!day && !day.revoked && day.validDate === zurichToday();
+}
+
+/** Every public function takes the access code and checks it server-side. */
+export async function assertTeam(ctx: QueryCtx, code: string) {
+  if (!(await isValidCode(ctx, code))) throw new ConvexError("Code d'équipe incorrect ou révoqué.");
+}
+
+/** Admin functions take the session token returned by admin.login. */
+export async function assertAdmin(ctx: QueryCtx, token: string) {
+  const session = token
+    ? await ctx.db
+        .query("adminSessions")
+        .withIndex("by_token", (q) => q.eq("token", token))
+        .first()
+    : null;
+  if (!session || session.expiresAt < Date.now()) throw new ConvexError("Session expirée, reconnecte-toi.");
 }

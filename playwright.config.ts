@@ -4,6 +4,7 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "e2e",
   timeout: 120_000,
+  workers: 1, // tests share the dev deployment data
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:5180/",
     acceptDownloads: true,

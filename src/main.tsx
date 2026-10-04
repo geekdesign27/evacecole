@@ -6,11 +6,13 @@ import "./index.css";
 import { convex, convexConfigured } from "./lib/convex";
 import { TeamProvider } from "./lib/team";
 import { TeamGate } from "./components/TeamGate";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ErrorBox } from "./components/ui";
 import { Home } from "./pages/Home";
 import { ExercisePage } from "./pages/Exercise";
 import { DayReportPage, SchoolReportPage } from "./pages/Report";
 import { PaperSheet } from "./pages/PaperSheet";
+import { AdminPage } from "./pages/Admin";
 
 function App() {
   if (!convexConfigured) {
@@ -26,9 +28,11 @@ function App() {
         <HashRouter>
           <Routes>
             <Route path="/fiche" element={<PaperSheet />} />
+            <Route path="/admin" element={<AdminPage />} />
             <Route
               path="*"
               element={
+                <ErrorBoundary>
                 <TeamGate>
                   <Routes>
                     <Route path="/" element={<Home />} />
@@ -38,6 +42,7 @@ function App() {
                     <Route path="*" element={<Home />} />
                   </Routes>
                 </TeamGate>
+                </ErrorBoundary>
               }
             />
           </Routes>

@@ -67,6 +67,8 @@ function JoinForm({
   onJoin: (d: Pick<Draft, "observer" | "zone" | "role">) => void;
 }) {
   const [params] = useSearchParams();
+  const { code } = useTeam();
+  const people = useQuery(api.team.participants, { code });
   const [name, setName] = useState(device.name);
   const [zone, setZone] = useState("");
   const [customZone, setCustomZone] = useState("");
@@ -108,6 +110,19 @@ function JoinForm({
                 placeholder="ex. Pierre-Alain Schütz"
               />
             </div>
+
+            {people && people.length > 0 && (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 font-medium">Je suis</legend>
+                <div className="flex flex-wrap gap-2">
+                  {people.map((p) => (
+                    <Chip key={p._id} active={name === p.name} onClick={() => setName(p.name)}>
+                      {p.name}
+                    </Chip>
+                  ))}
+                </div>
+              </fieldset>
+            )}
 
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 font-medium">Mon rôle</legend>
@@ -510,16 +525,12 @@ function TeamCard({ team }: { team: Doc<"observations">[] | undefined }) {
   );
 }
 
-function QrModal({
-  exId,
-  code,
-  onClose,
-}: {
-  exId: string;
-  code: string;
-  onClose: () => void;
-}) {
-  const link = `${window.location.origin}${window.location.pathname}#/x/${exId}?k=${encodeURIComponent(code)}`;
+function QrModal({ exId, code, onClose }: { exId: string; code: string; onClose: () => void }) {
+  // Never share the permanent code: the QR carries today's day code from the admin page.
+  const shared = useQuery(api.team.shareCode, { code });
+  const link = shared
+    ? `${window.location.origin}${window.location.pathname}#/x/${exId}?k=${encodeURIComponent(shared)}`
+    : `${window.location.origin}${window.location.pathname}#/x/${exId}`;
   const [copied, setCopied] = useState(false);
   return (
     <div
@@ -530,6 +541,11 @@ function QrModal({
     >
       <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl bg-white p-5">
         <h2 className="text-xl font-bold">Scanner pour rejoindre</h2>
+        {shared === null && (
+          <ErrorBox>
+            Aucun code du jour actif : les invité·es devront taper le code. Crée-en un dans « Gestion ».
+          </ErrorBox>
+        )}
         <QRCodeSVG value={link} size={260} marginSize={2} />
         <Button
           variant="secondary"

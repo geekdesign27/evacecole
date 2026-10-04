@@ -184,6 +184,18 @@ function ReportEditor({
     timer.current = window.setTimeout(flush, 700);
   };
 
+  // Follow server updates (a save still in flight when the screen opened, or a colleague's
+  // edit), except for fields typed here and not yet sent.
+  useEffect(() => {
+    setFields((f) => {
+      const next = { ...f };
+      for (const [k, val] of Object.entries(storedFields)) {
+        if (!(k in pending.current)) next[k as keyof ReportFields] = val;
+      }
+      return next;
+    });
+  }, [storedFields]);
+
   // Leaving the screen (or the app) sends the pending text instead of dropping it.
   useEffect(() => {
     const onHide = () => flush();

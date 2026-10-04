@@ -18,7 +18,7 @@ const LATE_DELIVERY_MS = 15_000;
 export const create = mutation({
   args: { code: v.string(), school: v.string(), exDate: v.string() },
   handler: async (ctx, { code, school, exDate }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const name = school.trim();
     if (!name) throw new ConvexError("Nom d'école manquant.");
     const known = await ctx.db
@@ -39,7 +39,7 @@ export const create = mutation({
 export const stamp = mutation({
   args: { code: v.string(), id: v.id("exercises"), field: timeField, clientTs: v.optional(v.number()) },
   handler: async (ctx, { code, id, field, clientTs }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
     if (ex[field] !== undefined) return ex[field]; // first tap wins
@@ -60,7 +60,7 @@ export const setTime = mutation({
     noteBy: v.optional(v.string()), // « Prénom Nom, zone » for report attribution
   },
   handler: async (ctx, { code, id, field, value, note, noteBy }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
     const patch: Record<string, unknown> = { [field]: value ?? undefined };
@@ -95,7 +95,7 @@ export const update = mutation({
     }),
   },
   handler: async (ctx, { code, id, patch }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
     const { report, ...rest } = patch;
@@ -106,7 +106,7 @@ export const update = mutation({
 export const archive = mutation({
   args: { code: v.string(), id: v.id("exercises"), archived: v.boolean() },
   handler: async (ctx, { code, id, archived }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     await ctx.db.patch(id, { archived });
   },
 });
@@ -114,7 +114,7 @@ export const archive = mutation({
 export const listRecent = query({
   args: { code: v.string() },
   handler: async (ctx, { code }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     return await ctx.db.query("exercises").withIndex("by_date").order("desc").take(300);
   },
 });
@@ -122,7 +122,7 @@ export const listRecent = query({
 export const get = query({
   args: { code: v.string(), id: v.id("exercises") },
   handler: async (ctx, { code, id }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     return await ctx.db.get(id);
   },
 });
@@ -130,7 +130,7 @@ export const get = query({
 export const getMany = query({
   args: { code: v.string(), ids: v.array(v.id("exercises")) },
   handler: async (ctx, { code, ids }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
     return docs.filter((d) => d !== null);
   },
@@ -139,7 +139,7 @@ export const getMany = query({
 export const schools = query({
   args: { code: v.string() },
   handler: async (ctx, { code }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const all = await ctx.db.query("schools").withIndex("by_name").take(500);
     return all.map((s) => s.name);
   },
@@ -148,7 +148,7 @@ export const schools = query({
 export const dayReport = query({
   args: { code: v.string(), exDate: v.string() },
   handler: async (ctx, { code, exDate }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const doc = await ctx.db
       .query("dayReports")
       .withIndex("by_date", (q) => q.eq("exDate", exDate))
@@ -160,7 +160,7 @@ export const dayReport = query({
 export const updateDayReport = mutation({
   args: { code: v.string(), exDate: v.string(), fields: v.record(v.string(), v.string()) },
   handler: async (ctx, { code, exDate, fields }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const doc = await ctx.db
       .query("dayReports")
       .withIndex("by_date", (q) => q.eq("exDate", exDate))

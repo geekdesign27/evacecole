@@ -1,0 +1,539 @@
+import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { QRCodeSVG } from "qrcode.react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import { fmtDateLong, todayIso } from "../domain/format";
+import { readJSON, removeKey, writeJSON } from "../lib/storage";
+import { useTeam } from "../lib/team";
+import {
+  Button,
+  Card,
+  Chip,
+  ErrorBox,
+  Spinner,
+  TopBar,
+} from "../components/ui";
+
+const TOKEN_KEY = "evac:admin";
+
+export function inviteLink(code: string) {
+  return `${window.location.origin}${window.location.pathname}#/?k=${encodeURIComponent(code)}`;
+}
+
+export function AdminPage() {
+  const [token, setToken] = useState(() => readJSON<string>(TOKEN_KEY, ""));
+  const ok = useQuery(api.admin.me, token ? { token } : "skip");
+  const logout = useMutation(api.admin.logout);
+
+  if (token && ok === undefined) return <Spinner />;
+  if (!token || !ok) {
+    return (
+      <Login
+        onLogged={(t) => {
+          writeJSON(TOKEN_KEY, t);
+          setToken(t);
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <TopBar
+        title="Gestion"
+        back="/"
+        right={
+          <button
+            type="button"
+            className="min-h-12 px-2 underline"
+            onClick={() => {
+              void logout({ token });
+              removeKey(TOKEN_KEY);
+              setToken("");
+            }}
+          >
+            Déconnexion
+          </button>
+        }
+      />
+      <main className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
+        <Codes token={token} />
+        <Participants token={token} />
+        <Schools token={token} />
+      </main>
+    </>
+  );
+}
+
+function Login({ onLogged }: { onLogged: (token: string) => void }) {
+  const login = useMutation(api.admin.login);
+  const [user, setUser] = useState("schutz.pa");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <>
+      <TopBar title="Gestion" back="/" />
+      <main className="mx-auto max-w-md p-4">
+        <Card>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusy(true);
+              setError(null);
+              try {
+                const res = await login({ user, password });
+                if (res.ok) onLogged(res.token);
+                else setError(res.error);
+              } catch (err) {
+                setError(
+                  err instanceof Error ? err.message : "Connexion impossible.",
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <h2 className="text-xl font-bold">Connexion administrateur</h2>
+            <label htmlFor="adm-user" className="font-medium">
+              Identifiant
+            </label>
+            <input
+              id="adm-user"
+              className="field"
+              autoCapitalize="none"
+              autoComplete="username"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+            />
+            <label htmlFor="adm-pass" className="font-medium">
+              Mot de passe
+            </label>
+            <input
+              id="adm-pass"
+              type="password"
+              className="field"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {error && <ErrorBox>{error}</ErrorBox>}
+            <Button type="submit" disabled={busy || !password}>
+              {busy ? "Connexion…" : "Se connecter"}
+            </Button>
+          </form>
+        </Card>
+      </main>
+    </>
+  );
+}
+
+function Codes({ token }: { token: string }) {
+  const codes = useQuery(api.admin.codes, { token });
+  const create = useMutation(api.admin.createCode);
+  const revoke = useMutation(api.admin.revokeCode);
+  const { code: deviceCode, setCode } = useTeam();
+  const [date, setDate] = useState(todayIso());
+  const [label, setLabel] = useState("");
+  const [shown, setShown] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-xl font-bold">Codes du jour</h2>
+      <p className="mb-3 text-sm text-muted">
+        Valable uniquement à la date choisie. Le QR code d'un exercice transmet
+        le code du jour actif.
+      </p>
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            className="field"
+            aria-label="Date de validité"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <input
+            className="field"
+            aria-label="Libellé"
+            placeholder="Libellé (facultatif)"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+        <Button
+          onClick={async () => {
+            setError(null);
+            try {
+              const c = await create({
+                token,
+                validDate: date,
+                label: label || undefined,
+              });
+              setLabel("");
+              setShown(c);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Création impossible.");
+            }
+          }}
+        >
+          Générer un code
+        </Button>
+        {error && <ErrorBox>{error}</ErrorBox>}
+      </div>
+
+      {codes === undefined ? (
+        <Spinner />
+      ) : (
+        <ul className="mt-3 flex flex-col">
+          {codes.map((c) => (
+            <li key={c._id} className="border-b border-line py-3 last:border-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-display text-lg font-bold tabular">
+                    {c.code}
+                  </p>
+                  <p className="text-sm text-muted">
+                    {fmtDateLong(c.validDate)}
+                    {c.label ? ` · ${c.label}` : ""}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-sm font-bold ${
+                    c.revoked
+                      ? "bg-brand text-white"
+                      : c.active
+                        ? "bg-ok text-white"
+                        : "bg-line text-ink"
+                  }`}
+                >
+                  {c.revoked
+                    ? "Révoqué"
+                    : c.active
+                      ? "Actif"
+                      : c.expired
+                        ? "Expiré"
+                        : "À venir"}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShown(shown === c.code ? null : c.code)}
+                >
+                  {shown === c.code ? "Masquer le QR" : "QR code"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inviteLink(c.code));
+                      setCopied(c.code);
+                    } catch {
+                      setCopied(null);
+                    }
+                  }}
+                >
+                  {copied === c.code ? "Lien copié" : "Copier le lien"}
+                </Button>
+                {c.active && deviceCode !== c.code && (
+                  <Button variant="secondary" onClick={() => setCode(c.code)}>
+                    Utiliser sur ce téléphone
+                  </Button>
+                )}
+                <Button
+                  variant={c.revoked ? "secondary" : "primary"}
+                  onClick={() =>
+                    void revoke({ token, id: c._id, revoked: !c.revoked })
+                  }
+                >
+                  {c.revoked ? "Réactiver" : "Révoquer"}
+                </Button>
+              </div>
+              {shown === c.code && (
+                <div className="mt-3 flex justify-center">
+                  <QRCodeSVG
+                    value={inviteLink(c.code)}
+                    size={240}
+                    marginSize={2}
+                  />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+/** « Prénom; Nom; courriel; fonction » per line (semicolon or tab). */
+function parseParticipants(text: string) {
+  return text
+    .split("\n")
+    .map((l) => l.split(/[;\t]/).map((s) => s.trim()))
+    .filter((cols) => cols[0] || cols[1])
+    .map(([firstName = "", lastName = "", email = "", fonction = ""]) => ({
+      firstName,
+      lastName,
+      email: email || undefined,
+      fonction: fonction || undefined,
+    }));
+}
+
+function Participants({ token }: { token: string }) {
+  const list = useQuery(api.admin.participants, { token });
+  const add = useMutation(api.admin.addParticipants);
+  const update = useMutation(api.admin.updateParticipant);
+  const remove = useMutation(api.admin.removeParticipant);
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    fonction: "",
+  });
+  const [bulk, setBulk] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(entries: ReturnType<typeof parseParticipants>) {
+    setError(null);
+    try {
+      const n = await add({ token, list: entries });
+      setMsg(
+        n === 0
+          ? "Déjà dans la liste."
+          : `${n} ${n > 1 ? "personnes ajoutées" : "personne ajoutée"}.`,
+      );
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ajout impossible.");
+      return false;
+    }
+  }
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-xl font-bold">Participant·es</h2>
+      <p className="mb-3 text-sm text-muted">
+        Les personnes actives apparaissent sur l'écran « Rejoindre » : un tap
+        sur son nom suffit.
+      </p>
+      {list === undefined ? (
+        <Spinner />
+      ) : (
+        <ul className="mb-3 flex flex-col">
+          {list.length === 0 && (
+            <li className="text-muted">Aucune personne inscrite.</li>
+          )}
+          {list.map((p) => (
+            <li
+              key={p._id}
+              className="flex items-center justify-between gap-2 border-b border-line py-2 last:border-0"
+            >
+              <div className="min-w-0">
+                <p
+                  className={`truncate font-medium ${p.active ? "" : "text-muted line-through"}`}
+                >
+                  {p.firstName} {p.lastName}
+                </p>
+                <p className="truncate text-sm text-muted">
+                  {[p.fonction, p.email].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Chip
+                  active={p.active}
+                  onClick={() =>
+                    void update({
+                      token,
+                      id: p._id,
+                      firstName: p.firstName,
+                      lastName: p.lastName,
+                      email: p.email,
+                      fonction: p.fonction,
+                      active: !p.active,
+                    })
+                  }
+                >
+                  {p.active ? "Actif" : "Inactif"}
+                </Chip>
+                <button
+                  type="button"
+                  className="min-h-12 min-w-12 rounded-xl text-xl"
+                  aria-label={`Supprimer ${p.firstName} ${p.lastName}`}
+                  onClick={() => {
+                    if (
+                      window.confirm(`Supprimer ${p.firstName} ${p.lastName} ?`)
+                    )
+                      void remove({ token, id: p._id as Id<"participants"> });
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="flex flex-col gap-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (
+            await submit([
+              {
+                ...form,
+                email: form.email || undefined,
+                fonction: form.fonction || undefined,
+              },
+            ])
+          ) {
+            setForm({ firstName: "", lastName: "", email: "", fonction: "" });
+          }
+        }}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            className="field"
+            aria-label="Prénom"
+            placeholder="Prénom"
+            value={form.firstName}
+            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+          />
+          <input
+            className="field"
+            aria-label="Nom"
+            placeholder="Nom"
+            value={form.lastName}
+            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+          />
+        </div>
+        <input
+          className="field"
+          type="email"
+          aria-label="Courriel"
+          placeholder="Courriel"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+        <input
+          className="field"
+          aria-label="Fonction"
+          placeholder="Fonction"
+          value={form.fonction}
+          onChange={(e) => setForm({ ...form, fonction: e.target.value })}
+        />
+        <Button
+          type="submit"
+          variant="dark"
+          disabled={!form.firstName.trim() && !form.lastName.trim()}
+        >
+          Ajouter
+        </Button>
+      </form>
+
+      <details className="mt-3">
+        <summary className="min-h-12 cursor-pointer py-3 font-medium">
+          Coller une liste
+        </summary>
+        <p className="mb-2 text-sm text-muted">
+          Une personne par ligne : Prénom; Nom; courriel; fonction
+        </p>
+        <textarea
+          className="field"
+          rows={5}
+          aria-label="Liste à importer"
+          value={bulk}
+          onChange={(e) => setBulk(e.target.value)}
+        />
+        <Button
+          className="mt-2"
+          variant="dark"
+          disabled={!bulk.trim()}
+          onClick={async () => {
+            if (await submit(parseParticipants(bulk))) setBulk("");
+          }}
+        >
+          Importer
+        </Button>
+      </details>
+      {msg && (
+        <p className="mt-2 text-sm" role="status">
+          {msg}
+        </p>
+      )}
+      {error && (
+        <div className="mt-2">
+          <ErrorBox>{error}</ErrorBox>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function Schools({ token }: { token: string }) {
+  const list = useQuery(api.admin.schools, { token });
+  const add = useMutation(api.admin.addSchools);
+  const remove = useMutation(api.admin.removeSchool);
+  const [text, setText] = useState("");
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-xl font-bold">Écoles</h2>
+      <p className="mb-3 text-sm text-muted">
+        Liste proposée à la création d'un exercice.
+      </p>
+      {list === undefined ? (
+        <Spinner />
+      ) : (
+        <ul className="mb-3 flex flex-col">
+          {list.map((s) => (
+            <li
+              key={s._id}
+              className="flex min-h-12 items-center justify-between border-b border-line last:border-0"
+            >
+              <span>{s.name}</span>
+              <button
+                type="button"
+                className="min-h-12 min-w-12 text-xl"
+                aria-label={`Retirer ${s.name}`}
+                onClick={() => {
+                  if (window.confirm(`Retirer « ${s.name} » de la liste ?`))
+                    void remove({ token, id: s._id });
+                }}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <textarea
+        className="field"
+        rows={3}
+        aria-label="Écoles à ajouter"
+        placeholder="Une école par ligne"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <Button
+        className="mt-2"
+        variant="dark"
+        disabled={!text.trim()}
+        onClick={async () => {
+          await add({ token, names: text.split("\n") });
+          setText("");
+        }}
+      >
+        Ajouter
+      </Button>
+    </Card>
+  );
+}

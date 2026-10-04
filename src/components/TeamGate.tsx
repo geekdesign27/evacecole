@@ -46,8 +46,12 @@ export function TeamGate({ children }: { children: ReactNode }) {
             onChange={(e) => setInput(e.target.value)}
             required
           />
-          {submitted && code && valid === false && (
-            <ErrorBox>Code incorrect. Demande-le au chef d'exercice.</ErrorBox>
+          {code && valid === false && (
+            <ErrorBox>
+              {submitted
+                ? "Code incorrect. Demande-le au chef d'exercice."
+                : "Ce code n'est plus valable. Scanne le QR code du jour ou demande le nouveau code au chef d'exercice."}
+            </ErrorBox>
           )}
           <Button type="submit">Entrer</Button>
           <p className="text-sm text-muted">

@@ -19,7 +19,7 @@ export const upsert = mutation({
     updatedAt: v.number(), // client edit time, protects against stale replays
   },
   handler: async (ctx, { code, ...obs }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const existing = await ctx.db
       .query("observations")
       .withIndex("by_client", (q) => q.eq("clientId", obs.clientId).eq("exerciseId", obs.exerciseId))
@@ -52,7 +52,7 @@ async function forExercise(ctx: QueryCtx, exerciseId: Id<"exercises">) {
 export const byExercise = query({
   args: { code: v.string(), exerciseId: v.id("exercises") },
   handler: async (ctx, { code, exerciseId }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     return forExercise(ctx, exerciseId);
   },
 });
@@ -60,7 +60,7 @@ export const byExercise = query({
 export const byExercises = query({
   args: { code: v.string(), exerciseIds: v.array(v.id("exercises")) },
   handler: async (ctx, { code, exerciseIds }) => {
-    assertTeam(code);
+    await assertTeam(ctx, code);
     const all = await Promise.all(exerciseIds.map((id) => forExercise(ctx, id)));
     return all.flat();
   },

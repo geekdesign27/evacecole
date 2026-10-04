@@ -177,9 +177,14 @@ export function Home() {
           </section>
         )}
 
-        <Link to="/fiche" className="flex min-h-12 items-center justify-center font-medium underline">
-          Fiche papier (mode dégradé)
-        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link to="/fiche" className="flex min-h-12 items-center justify-center font-medium underline">
+            Fiche papier
+          </Link>
+          <Link to="/admin" className="flex min-h-12 items-center justify-center font-medium underline">
+            Gestion
+          </Link>
+        </div>
         <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>
           {showArchived
             ? "Masquer les exercices archivés"

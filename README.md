@@ -5,13 +5,20 @@ Compagnie des sapeurs-pompiers Moncor. Une page, à lire une fois avant l'exerci
 ## Avant (une seule fois par téléphone)
 
 1. Ouvre le lien de l'app (ou scanne le QR code de l'interpellateur).
-2. Si l'app le demande, tape le **code d'équipe** donné par le chef d'exercice. Le téléphone s'en souvient.
+2. Avec le QR code, rien à taper. Sinon, tape le **code du jour** donné par le chef d'exercice.
 3. Conseil : « Ajouter à l'écran d'accueil » (menu Partager sur iPhone, menu ⋮ sur Android).
+
+## Gestion (Pierre-Alain)
+
+Accueil, lien **Gestion** en bas, identifiant `schutz.pa`.
+- **Codes du jour** : **Générer un code** pour la date de l'exercice. Le QR code de chaque exercice transmet ce code. **Révoquer** coupe l'accès immédiatement.
+- **Participant·es** : la liste des personnes. Sur l'écran « Rejoindre », chacun touche son nom.
+- **Écoles** : la liste proposée à la création d'un exercice.
 
 ## L'interpellateur
 
 1. Accueil : choisis l'école, touche **Créer l'exercice du jour**.
-2. Tape ton prénom et nom, garde **Je suis l'interpellateur**, touche **Rejoindre**.
+2. Touche ton nom, garde **Je suis l'interpellateur**, touche **Rejoindre**.
 3. Touche **Inviter (QR code)** en bas et montre l'écran à l'équipe.
 4. Note la classe, l'enseignant·e, le lieu du sinistre fictif.
 5. Touche **Début** au moment où tu frappes à la porte.
@@ -20,7 +27,7 @@ Compagnie des sapeurs-pompiers Moncor. Une page, à lire une fois avant l'exerci
 
 ## Les observateurs
 
-1. Scanne le QR code, tape ton prénom et nom, choisis ta zone, touche **Rejoindre**.
+1. Scanne le QR code, touche ton nom, choisis ta zone, touche **Rejoindre**.
 2. Dès que tu entends l'alarme, touche **J'entends l'alarme évacuation** : le chrono démarre chez tout le monde.
 3. Réponds aux points de ta liste dans ta zone.
 4. Quand ta zone est vide, touche **Ma zone est évacuée**.

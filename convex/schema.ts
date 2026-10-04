@@ -51,6 +51,34 @@ export default defineSchema({
 
   schools: defineTable({ name: v.string() }).index("by_name", ["name"]),
 
+  participants: defineTable({
+    firstName: v.string(),
+    lastName: v.string(),
+    email: v.optional(v.string()),
+    fonction: v.optional(v.string()),
+    active: v.boolean(),
+  }),
+
+  // Day codes created by the admin: valid on one date, revocable at any time.
+  accessCodes: defineTable({
+    code: v.string(),
+    validDate: v.string(), // YYYY-MM-DD, Europe/Zurich
+    label: v.optional(v.string()),
+    revoked: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_code", ["code"]),
+
+  adminSessions: defineTable({
+    token: v.string(),
+    expiresAt: v.number(),
+  }).index("by_token", ["token"]),
+
+  // Single row: failed admin logins, to slow down password guessing.
+  adminGuard: defineTable({
+    failures: v.number(),
+    lockedUntil: v.number(),
+  }),
+
   // Editable fields of a multi-school day report (not tied to one exercise).
   dayReports: defineTable({
     exDate: v.string(),
