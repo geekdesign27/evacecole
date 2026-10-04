@@ -24,11 +24,29 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await admin.getByRole("button", { name: "Importer" }).click();
   await expect(admin.getByText("2 personnes ajoutées.")).toBeVisible();
 
-  // Day code for today
-  await admin.getByRole("button", { name: "Générer un code" }).click();
-  const code = (await admin.locator("li p.font-display").first().textContent())!.trim();
-  expect(code).toMatch(/^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/);
+  // A code that is too short is refused; a code chosen by the admin is accepted
+  await admin.getByLabel("Mon code").fill("abc");
+  await admin.getByRole("button", { name: "Créer le code" }).click();
+  await expect(admin.getByText("6 caractères minimum")).toBeVisible();
+  const code = `jour${suffix}`;
+  await admin.getByLabel("Mon code").fill(code.toUpperCase());
+  await admin.getByRole("button", { name: "Créer le code" }).click();
   await expect(admin.locator("li", { hasText: code }).getByText("Actif")).toBeVisible();
+
+  // Invitations: ready-made mail for everyone and per person
+  const all = admin.getByRole("link", { name: /Un courriel à tout le monde/ });
+  await expect(all).toHaveAttribute("href", /^mailto:\?bcc=alice%40example\.ch/);
+  const personal = admin.locator("li", { hasText: `Alice Test${suffix}` }).getByRole("link", { name: "Envoyer par courriel" });
+  const href = decodeURIComponent((await personal.getAttribute("href"))!);
+  expect(href).toContain(`k=${code}&n=Alice%20Test${suffix}`);
+
+  // Personal link: name already filled in on the join screen
+  const personalLink = href.match(/https?:\/\/\S+/)![0];
+  const alicePhone = await (await browser.newContext({ ...test.info().project.use })).newPage();
+  await alicePhone.goto(personalLink);
+  await expect(alicePhone.getByText("Nouvel exercice")).toBeVisible();
+  await expect(alicePhone).not.toHaveURL(/k=|n=/);
+  await alicePhone.context().close();
 
   // A phone joins with the day code and picks its name in one tap
   const phone = await (await browser.newContext({ ...test.info().project.use })).newPage();
@@ -39,8 +57,8 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await phone.getByLabel("Nom de l'école").fill(`École admin ${suffix}`);
   await phone.getByRole("button", { name: "Créer l'exercice du jour" }).click();
   await phone.getByLabel("Prénom et nom").fill("");
-  await phone.getByRole("button", { name: `Alice Test${suffix}` }).click();
-  await expect(phone.getByLabel("Prénom et nom")).toHaveValue(`Alice Test${suffix}`);
+  await phone.getByRole("button", { name: `Bruno Test${suffix}` }).click();
+  await expect(phone.getByLabel("Prénom et nom")).toHaveValue(`Bruno Test${suffix}`);
   await phone.getByRole("button", { name: "Rejoindre" }).click();
   await expect(phone.getByRole("button", { name: "Début", exact: true })).toBeVisible();
 

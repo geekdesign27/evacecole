@@ -11,8 +11,8 @@ Compagnie des sapeurs-pompiers Moncor. Une page, à lire une fois avant l'exerci
 ## Gestion (Pierre-Alain)
 
 Accueil, lien **Gestion** en bas, identifiant `schutz.pa`.
-- **Codes du jour** : **Générer un code** pour la date de l'exercice. Le QR code de chaque exercice transmet ce code. **Révoquer** coupe l'accès immédiatement.
-- **Participant·es** : la liste des personnes. Sur l'écran « Rejoindre », chacun touche son nom.
+- **Codes du jour** : choisis la date, tape ton code (ex. `moncor5`, 6 caractères minimum) ou laisse vide pour un code généré, puis **Créer le code**. Le QR code de chaque exercice transmet ce code. **Révoquer** coupe l'accès immédiatement.
+- **Participant·es** : la liste des personnes. **Envoyer par courriel** ouvre ta messagerie avec un message prêt et un lien personnel (code et nom déjà remplis). **Un courriel à tout le monde** envoie le lien général en copie cachée.
 - **Écoles** : la liste proposée à la création d'un exercice.
 
 ## L'interpellateur

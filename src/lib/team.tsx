@@ -10,21 +10,24 @@ const Ctx = createContext<TeamCtx>({ code: "", setCode: () => {} });
 
 export function TeamProvider({ children }: { children: ReactNode }) {
   const [code, setCodeState] = useState(() => {
-    // A QR link may carry the team code (?k=...) so newcomers skip typing it.
-    const fromLink = new URLSearchParams(
-      window.location.hash.split("?")[1] ?? "",
-    ).get("k");
-    if (fromLink) {
-      device.teamCode = fromLink;
-      // Drop the code from the address bar and history; it stays in localStorage.
-      // Runs before HashRouter mounts, so the router never sees ?k=.
-      const cleaned = window.location.hash
-        .replace(/([?&])k=[^&]*&?/, "$1")
-        .replace(/[?&]$/, "");
+    // A QR or personal link may carry the team code (?k=) and the person's name (?n=),
+    // so newcomers skip typing them.
+    const params = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+    const fromLink = params.get("k");
+    const nameFromLink = params.get("n");
+    if (nameFromLink) device.name = nameFromLink;
+    if (fromLink) device.teamCode = fromLink;
+    if (fromLink || nameFromLink) {
+      // Drop both from the address bar and history; they stay in localStorage.
+      // Runs before HashRouter mounts, so the router never sees them.
+      params.delete("k");
+      params.delete("n");
+      const [path] = window.location.hash.split("?");
+      const rest = params.toString();
       window.history.replaceState(
         window.history.state,
         "",
-        window.location.pathname + cleaned,
+        window.location.pathname + path + (rest ? `?${rest}` : ""),
       );
     }
     return fromLink ?? device.teamCode;

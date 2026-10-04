@@ -205,12 +205,26 @@ export const createCode = mutation({
     token: v.string(),
     validDate: v.string(),
     label: v.optional(v.string()),
+    /** Code chosen by the admin (easy to dictate); generated when empty. */
+    custom: v.optional(v.string()),
   },
-  handler: async (ctx, { token, validDate, label }) => {
+  handler: async (ctx, { token, validDate, label, custom }) => {
     await assertAdmin(ctx, token);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(validDate))
       throw new ConvexError("Date invalide.");
-    const code = `${randomString(4)}-${randomString(4)}-${randomString(4)}`;
+    let code = `${randomString(4)}-${randomString(4)}-${randomString(4)}`;
+    if (custom?.trim()) {
+      code = custom.trim().toLowerCase();
+      if (!/^[a-z0-9-]{6,40}$/.test(code))
+        throw new ConvexError("Code : 6 caractères minimum, lettres sans accent, chiffres ou tirets.");
+      const permanent = process.env.TEAM_CODE?.trim().toLowerCase();
+      if (code === permanent) throw new ConvexError("Ce code est déjà utilisé.");
+      const taken = await ctx.db
+        .query("accessCodes")
+        .withIndex("by_code", (q) => q.eq("code", code))
+        .first();
+      if (taken) throw new ConvexError("Ce code a déjà été utilisé, choisis-en un autre.");
+    }
     await ctx.db.insert("accessCodes", {
       code,
       validDate,

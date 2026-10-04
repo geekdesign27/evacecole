@@ -17,8 +17,37 @@ import {
 
 const TOKEN_KEY = "evac:admin";
 
-export function inviteLink(code: string) {
-  return `${window.location.origin}${window.location.pathname}#/?k=${encodeURIComponent(code)}`;
+export function inviteLink(code: string, name?: string) {
+  const n = name ? `&n=${encodeURIComponent(name)}` : "";
+  return `${window.location.origin}${window.location.pathname}#/?k=${encodeURIComponent(code)}${n}`;
+}
+
+/** Opens the admin's own mail app with a ready-to-send message (no mail service needed). */
+function mailto(to: string[], subject: string, body: string, bcc = false) {
+  const list = to.map(encodeURIComponent).join(",");
+  const q = `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return bcc ? `mailto:?bcc=${list}&${q}` : `mailto:${list}?${q}`;
+}
+
+/** Newest code still usable (today or later, not revoked): used for invitations. */
+function useInviteCode(token: string) {
+  const codes = useQuery(api.admin.codes, { token });
+  return codes?.find((c) => !c.revoked && !c.expired) ?? null;
+}
+
+function inviteBody(link: string, code: string, date: string, firstName?: string) {
+  return [
+    firstName ? `Bonjour ${firstName},` : "Bonjour,",
+    "",
+    `Voici l'accès à l'application des exercices d'évacuation pour le ${fmtDateLong(date)}.`,
+    "",
+    "Ouvre ce lien sur ton téléphone, il te connecte directement :",
+    link,
+    "",
+    `Si le lien ne marche pas, le code du jour est : ${code}`,
+    "",
+    "Compagnie des sapeurs-pompiers Moncor",
+  ].join("\n");
 }
 
 export function AdminPage() {
@@ -138,6 +167,7 @@ function Codes({ token }: { token: string }) {
   const { code: deviceCode, setCode } = useTeam();
   const [date, setDate] = useState(todayIso());
   const [label, setLabel] = useState("");
+  const [custom, setCustom] = useState("");
   const [shown, setShown] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +196,15 @@ function Codes({ token }: { token: string }) {
             onChange={(e) => setLabel(e.target.value)}
           />
         </div>
+        <input
+          className="field"
+          aria-label="Mon code"
+          autoCapitalize="none"
+          autoComplete="off"
+          placeholder="Mon code (facultatif, ex. moncor5), sinon généré"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+        />
         <Button
           onClick={async () => {
             setError(null);
@@ -174,15 +213,17 @@ function Codes({ token }: { token: string }) {
                 token,
                 validDate: date,
                 label: label || undefined,
+                custom: custom || undefined,
               });
               setLabel("");
+              setCustom("");
               setShown(c);
             } catch (e) {
               setError(e instanceof Error ? e.message : "Création impossible.");
             }
           }}
         >
-          Générer un code
+          Créer le code
         </Button>
         {error && <ErrorBox>{error}</ErrorBox>}
       </div>
@@ -286,7 +327,51 @@ function parseParticipants(text: string) {
     }));
 }
 
+function PersonInvite({
+  code,
+  date,
+  firstName,
+  name,
+  email,
+}: {
+  code: string;
+  date: string;
+  firstName: string;
+  name: string;
+  email?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const link = inviteLink(code, name);
+  return (
+    <div className="mt-1 flex flex-wrap gap-x-4">
+      {email && (
+        <a
+          className="flex min-h-12 items-center font-medium text-brand underline"
+          href={mailto([email], "Exercice d'évacuation : ton accès", inviteBody(link, code, date, firstName))}
+        >
+          Envoyer par courriel
+        </a>
+      )}
+      <button
+        type="button"
+        className="min-h-12 font-medium underline"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(link);
+            setCopied(true);
+          } catch {
+            setCopied(false);
+          }
+        }}
+      >
+        {copied ? "Lien copié" : "Copier son lien"}
+      </button>
+    </div>
+  );
+}
+
 function Participants({ token }: { token: string }) {
+  const invite = useInviteCode(token);
   const list = useQuery(api.admin.participants, { token });
   const add = useMutation(api.admin.addParticipants);
   const update = useMutation(api.admin.updateParticipant);
@@ -324,6 +409,22 @@ function Participants({ token }: { token: string }) {
         Les personnes actives apparaissent sur l'écran « Rejoindre » : un tap
         sur son nom suffit.
       </p>
+      {list !== undefined && list.length > 0 && !invite && (
+        <p className="mb-2 text-sm font-medium">Crée d'abord un code du jour pour pouvoir envoyer les accès.</p>
+      )}
+      {invite && list && list.some((p) => p.active && p.email) && (
+        <a
+          className="mb-3 flex min-h-12 items-center justify-center rounded-xl bg-ink px-4 font-medium text-white"
+          href={mailto(
+            list.filter((p) => p.active && p.email).map((p) => p.email!),
+            "Exercice d'évacuation : ton accès",
+            inviteBody(inviteLink(invite.code), invite.code, invite.validDate),
+            true,
+          )}
+        >
+          Un courriel à tout le monde (code {invite.code})
+        </a>
+      )}
       {list === undefined ? (
         <Spinner />
       ) : (
@@ -345,6 +446,15 @@ function Participants({ token }: { token: string }) {
                 <p className="truncate text-sm text-muted">
                   {[p.fonction, p.email].filter(Boolean).join(" · ")}
                 </p>
+                {invite && p.active && (
+                  <PersonInvite
+                    code={invite.code}
+                    date={invite.validDate}
+                    firstName={p.firstName}
+                    name={`${p.firstName} ${p.lastName}`.trim()}
+                    email={p.email}
+                  />
+                )}
               </div>
               <div className="flex shrink-0 gap-1">
                 <Chip
