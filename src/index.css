@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #c71a1a;
+  --color-brand-dark: #9e1414;
+  --color-brand-soft: #fbeaea;
+  --color-ink: #1a1d24;
+  --color-muted: #5f6672; /* darker than spec #6B7280 for sunlight contrast (AA on #F4F5F7) */
+  --color-line: #e7e9ee;
+  --color-bg: #f4f5f7;
+  --color-card: #ffffff;
+  --color-ok: #1e8e3e;
+  --color-amber: #faba2a;
+  --font-display: "Saira", system-ui, sans-serif;
+  --font-sans: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  font-size: 17px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+input, textarea, select, button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Visible focus for keyboard users, invisible for touch */
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+.field {
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid var(--color-line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 14px;
+}
+.field:focus {
+  border-color: var(--color-ink);
+  outline: none;
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+}
