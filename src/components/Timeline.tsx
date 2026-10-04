@@ -140,7 +140,9 @@ function TimeEditor({
         code,
         id: ex._id,
         field,
-        value: clear ? null : fromInputValue(ex.exDate, time),
+        // An emptied time field plus « Valider » keeps the recorded time:
+        // only « Effacer l'heure » removes it.
+        value: clear ? null : (fromInputValue(ex.exDate, time) ?? ex[field] ?? null),
         note,
         noteBy: author,
       });

@@ -108,6 +108,11 @@ export function useObservationDraft(exerciseId: Id<"exercises">, code: string) {
     } finally {
       inflight.current = false;
     }
+    // A tap made during the send is pushed right away instead of on the next 4 s tick.
+    const after = latest.current;
+    if (after && (after.syncedAt === undefined || after.syncedAt < after.updatedAt) && after.updatedAt !== d.updatedAt) {
+      void push();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, upsert]);
 

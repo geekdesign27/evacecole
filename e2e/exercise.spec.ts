@@ -132,6 +132,12 @@ test("full exercise with three phones, offline safety and both exports", async (
 
   await lead.getByLabel("Rédigé par").fill("Cap Pierre-Alain Schütz");
 
+  // Text typed just before leaving the screen is saved, not dropped
+  await lead.getByLabel("Conclusion").fill("Merci à toute l'équipe de l'école.");
+  await lead.getByRole("link", { name: "Retour" }).click();
+  await lead.getByRole("link", { name: "Synthèse" }).click();
+  await expect(lead.getByLabel("Conclusion")).toHaveValue("Merci à toute l'équipe de l'école.");
+
   for (const [button, ext] of [
     ["Télécharger PDF", "pdf"],
     ["Télécharger Word", "docx"],

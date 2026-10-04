@@ -15,13 +15,6 @@ import { useTeam } from "../lib/team";
 import { downloadBlob, loadAssets } from "../export/assets";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 
-const FIELD_KEYS: (keyof ReportFields)[] = [
-  "recipients",
-  "author",
-  "intro",
-  "recommendations",
-  "conclusion",
-];
 
 /** Report of one school. */
 export function SchoolReportPage() {
@@ -161,26 +154,46 @@ function ReportEditor({
     return (model[k as keyof ReportModel] as string) ?? "";
   };
 
-  const edit = (k: keyof ReportFields, value: string) => {
-    const next = { ...fields, [k]: value };
-    setFields(next);
-    if (k === "author") device.author = value;
+  // Only keys edited on this device are sent (the server merges per key), so a
+  // colleague's edits on other fields are never overwritten.
+  const pending = useRef<Record<string, string>>({});
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  const flush = () => {
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => {
-      const payload: Record<string, string> = {};
-      for (const key of FIELD_KEYS)
-        if (next[key] !== undefined) payload[key] = next[key] as string;
-      onSave(payload).then(
-        () => setSaveError(null),
-        (e) =>
-          setSaveError(
-            e instanceof Error ? e.message : "Enregistrement impossible.",
-          ),
-      );
-    }, 700);
+    timer.current = undefined;
+    const payload = pending.current;
+    if (!Object.keys(payload).length) return;
+    pending.current = {};
+    onSaveRef.current(payload).then(
+      () => setSaveError(null),
+      (e) => {
+        // Keep the text so the next edit or flush retries it.
+        pending.current = { ...payload, ...pending.current };
+        setSaveError(e instanceof Error ? e.message : "Enregistrement impossible.");
+      },
+    );
   };
 
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const edit = (k: keyof ReportFields, value: string) => {
+    setFields((f) => ({ ...f, [k]: value }));
+    if (k === "author") device.author = value;
+    pending.current = { ...pending.current, [k]: value };
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(flush, 700);
+  };
+
+  // Leaving the screen (or the app) sends the pending text instead of dropping it.
+  useEffect(() => {
+    const onHide = () => flush();
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const body = (
     <div className="flex flex-col gap-3">
