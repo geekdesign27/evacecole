@@ -121,10 +121,9 @@ test("full exercise with three phones, offline safety and both exports", async (
   const preview = lead.getByRole("article", { name: "Aperçu du rapport" });
   await expect(preview).toContainText(`Rapport d'exercice d'évacuation : ${school}`);
   await expect(preview.getByRole("heading", { name: "Personne interpellée", exact: true })).toBeVisible();
-  await expect(preview.getByRole("heading", { name: "Rez", exact: true })).toBeVisible();
-  await expect(preview.getByRole("heading", { name: "1er étage" })).toBeVisible();
-  await expect(preview).toContainText("Observé par Anne Dupont");
-  await expect(preview).toContainText("Quelques portes sont restées ouvertes.");
+  await expect(preview.getByRole("heading", { name: "Comportement dans les étages" })).toBeVisible();
+  await expect(preview).toContainText("Rez (Luc Morel), 1er étage (Anne Dupont)");
+  await expect(preview).toContainText("Quelques portes sont restées ouvertes (1er étage). En ordre : Rez.");
   await expect(preview).toContainText("Objectif");
   await expect(preview).toContainText("Plusieurs portes calées constatées.");
   await expect(preview).toContainText("« Porte coupe-feu calée avec une chaise » (Anne Dupont, 1er étage)");

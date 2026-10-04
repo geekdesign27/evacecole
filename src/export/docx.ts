@@ -17,7 +17,8 @@ import {
   WidthType,
   type FileChild,
 } from "docx";
-import type { ReportBlock, ReportLine, ReportModel, SchoolReport } from "../domain/buildReport";
+import type { ReportGroup, ReportLine, ReportModel, SchoolReport } from "../domain/buildReport";
+import { factRows } from "./layout";
 import { dataUrlToBytes, type RasterImage } from "../lib/images";
 import { typo } from "../lib/typo";
 import { mapRuns, parseRich, type RichRun } from "../domain/rich";
@@ -131,45 +132,125 @@ function image(
 
 function lineParagraphs(line: ReportLine): Paragraph[] {
   return [
-    new Paragraph(t(line.text)),
+    new Paragraph({ spacing: { after: 20 }, children: [new TextRun(t(line.text))] }),
     ...line.comments.map(
-      (c) => new Paragraph({ indent: { left: 360 }, children: [new TextRun({ text: t(c), italics: true, color: MUTED })] }),
+      (c) =>
+        new Paragraph({
+          indent: { left: 300 },
+          spacing: { after: 20 },
+          children: [new TextRun({ text: t(c), italics: true, color: MUTED, size: 18 })],
+        }),
     ),
   ];
 }
 
-function blockParagraphs(b: ReportBlock, assets: ExportAssets): FileChild[] {
-  const out: FileChild[] = [heading(b.title, HeadingLevel.HEADING_3)];
-  out.push(new Paragraph({ keepNext: true, children: [new TextRun({ text: t(b.observers), size: 18, color: MUTED })] }));
-  for (const g of b.groups) {
-    out.push(heading(g.title, HeadingLevel.HEADING_4));
-    for (const line of g.lines) out.push(...lineParagraphs(line));
-  }
-  if (b.remarks.length) {
-    out.push(heading("Remarques", HeadingLevel.HEADING_4));
-    for (const r of b.remarks) out.push(new Paragraph(t(r)));
-  }
-  const photos = b.photos.filter((p) => assets.photos.has(p.url));
-  if (photos.length) {
-    out.push(heading("Photos", HeadingLevel.HEADING_4));
-    for (const p of photos) {
-      out.push(new Paragraph({ keepNext: true, children: [image(assets.photos.get(p.url)!, 300, 225, "jpg")] }));
-      out.push(new Paragraph({ children: [new TextRun({ text: t(p.caption), size: 18, color: MUTED })] }));
-    }
+function groupParagraphs(g: ReportGroup): Paragraph[] {
+  const out: Paragraph[] = [heading(g.title, HeadingLevel.HEADING_3)];
+  for (const line of g.issues) out.push(...lineParagraphs(line));
+  if (g.ok.length) {
+    out.push(
+      new Paragraph({
+        spacing: { before: 40 },
+        children: [
+          new TextRun({ text: t("En ordre : "), bold: true, color: MUTED, size: 19 }),
+          new TextRun({ text: t(g.ok.join(" ")), color: MUTED, size: 19 }),
+        ],
+      }),
+    );
   }
   return out;
 }
 
+const cellMargins = { top: 30, bottom: 30, left: 80, right: 80 };
+
+/** Facts on two label/value columns, like the PDF. */
+function factsTable(facts: SchoolReport["facts"]): Table {
+  const w = [Math.round(CONTENT_WIDTH * 0.2), Math.round(CONTENT_WIDTH * 0.3), Math.round(CONTENT_WIDTH * 0.22), 0];
+  w[3] = CONTENT_WIDTH - w[0] - w[1] - w[2];
+  const label = (text: string, width: number) =>
+    new TableCell({
+      borders,
+      margins: cellMargins,
+      width: { size: width, type: WidthType.DXA },
+      children: [new Paragraph({ children: [new TextRun({ text: t(text), bold: true, size: 18, color: MUTED })] })],
+    });
+  const value = (text: string, width: number, strong?: boolean, span?: number) =>
+    new TableCell({
+      borders,
+      margins: cellMargins,
+      columnSpan: span,
+      width: { size: width, type: WidthType.DXA },
+      children: [new Paragraph({ children: [new TextRun({ text: t(text), bold: strong, size: strong ? 22 : 20 })] })],
+    });
+  return new Table({
+    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: w,
+    rows: factRows(facts).map(
+      (row) =>
+        new TableRow({
+          children:
+            row.length === 2
+              ? [label(row[0].label, w[0]), value(row[0].value, w[1]), label(row[1].label, w[2]), value(row[1].value, w[3])]
+              : [label(row[0].label, w[0]), value(row[0].value, w[1] + w[2] + w[3], row[0].strong, 3)],
+        }),
+    ),
+  });
+}
+
 function schoolBlock(s: SchoolReport, model: ReportModel, assets: ExportAssets): FileChild[] {
-  const out: FileChild[] = [];
-  out.push(heading(model.mode === "day" ? s.school : "Déroulement", HeadingLevel.HEADING_2));
-  out.push(kvTable(s.facts));
-  for (const n of s.timingNotes) {
-    out.push(new Paragraph({ children: [new TextRun({ text: t(n), size: 19, color: MUTED })] }));
+  const out: FileChild[] = [
+    model.mode === "day"
+      ? new Paragraph({ heading: HeadingLevel.HEADING_2, pageBreakBefore: true, children: [new TextRun(t(s.school))] })
+      : heading("Déroulement", HeadingLevel.HEADING_2),
+  ];
+  out.push(factsTable(s.facts));
+  for (const n of s.timingNotes) out.push(new Paragraph({ children: [new TextRun({ text: t(n), size: 18, color: MUTED })] }));
+  out.push(new Paragraph({ spacing: { before: 100, after: 40 }, children: [new TextRun({ text: t(s.summary), bold: true })] }));
+  if (s.zonesObserved) {
+    out.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: t("Zones observées : "), bold: true, size: 19, color: MUTED }),
+          new TextRun({ text: t(s.zonesObserved), size: 19, color: MUTED }),
+        ],
+      }),
+    );
   }
-  out.push(new Paragraph({ spacing: { before: 160 }, children: [new TextRun({ text: t(s.summary), bold: true })] }));
-  if (s.blocks.length) out.push(heading("Observations", HeadingLevel.HEADING_2));
-  for (const b of s.blocks) out.push(...blockParagraphs(b, assets));
+  for (const g of s.groups) out.push(...groupParagraphs(g));
+  if (s.remarks.length) {
+    out.push(heading("Remarques", HeadingLevel.HEADING_3));
+    for (const r of s.remarks) out.push(new Paragraph({ spacing: { after: 20 }, children: [new TextRun(t(r))] }));
+  }
+  const photos = s.photos.filter((p) => assets.photos.has(p.url));
+  if (photos.length) {
+    out.push(heading("Photos", HeadingLevel.HEADING_3));
+    // Three small photos per row in a borderless table, each with its caption.
+    const none = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+    const noBorders = { top: none, bottom: none, left: none, right: none };
+    const colW = Math.floor(CONTENT_WIDTH / 3);
+    const rows: TableRow[] = [];
+    for (let i = 0; i < photos.length; i += 3) {
+      const slice = photos.slice(i, i + 3);
+      rows.push(
+        new TableRow({
+          children: [0, 1, 2].map((k) => {
+            const p = slice[k];
+            return new TableCell({
+              borders: noBorders,
+              width: { size: colW, type: WidthType.DXA },
+              children: p
+                ? [
+                    new Paragraph({ children: [image(assets.photos.get(p.url)!, 190, 135, "jpg")] }),
+                    new Paragraph({ children: [new TextRun({ text: t(p.caption), size: 16, color: MUTED })] }),
+                  ]
+                : [new Paragraph("")],
+            });
+          }),
+        }),
+      );
+    }
+    out.push(new Table({ width: { size: colW * 3, type: WidthType.DXA }, columnWidths: [colW, colW, colW], rows }));
+  }
   return out;
 }
 

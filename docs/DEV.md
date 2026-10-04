@@ -46,10 +46,11 @@ Variable d'environnement Convex de production : `TEAM_CODE` (Dashboard Convex, S
 
 ## Écarts par rapport à la SPEC
 
-- **Structure du rapport (2026-10-04, demande de PA)** : les observations ne sont plus fusionnées point par point
-  (SPEC section 6). Elles sont présentées en blocs : « Personne interpellée », puis un bloc par zone, dans l'ordre
-  du bâtiment, avec les points cochés (Oui, Partiel, Non ; N/A omis), commentaires, remarques et photos de la zone.
-  Le bilan court et les suggestions de recommandations restent calculés sur l'ensemble de l'équipe.
+- **Structure du rapport (2026-10-04, demande de PA)** : rapport compact, une page par école. Tableau des heures
+  sur deux colonnes, ligne « Zones observées », puis trois rubriques (Personne interpellée, Comportement dans les
+  étages, Technique) où les réponses de l'équipe sont fusionnées point par point : points à améliorer d'abord, avec
+  les zones concernées et « En ordre : … », puis les points conformes en un seul paragraphe. Remarques et photos
+  (vignettes, 3 par ligne) en fin de section. En rapport de journée, chaque école commence sur une nouvelle page.
 - **Recommandations** : texte libre de l'auteur. Les recommandations déduites des points Partiel/Non sont proposées
   par le bouton « Insérer les suggestions ».
 - **Objectif** : section séparée et éditable sous l'introduction.

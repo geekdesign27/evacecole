@@ -453,49 +453,52 @@ function Preview({ model }: { model: ReportModel }) {
               {t(n)}
             </p>
           ))}
-          {s.blocks.length > 0 && <h3 className="mt-4 text-lg font-bold text-brand">Observations</h3>}
-          {s.blocks.map((b) => (
-            <div key={b.title} className="mt-3">
-              <h4 className="text-[17px] font-bold">{t(b.title)}</h4>
-              <p className="text-sm text-muted">{t(b.observers)}</p>
-              {b.groups.map((g) => (
-                <div key={g.title} className="mt-1">
-                  <h5 className="font-medium underline">{t(g.title)}</h5>
-                  {g.lines.map((l, i) => (
-                    <div key={i}>
-                      <p>{t(l.text)}</p>
-                      {l.comments.map((c, j) => (
-                        <p key={j} className="ml-4 italic text-muted">
-                          {t(c)}
-                        </p>
-                      ))}
-                    </div>
+          {s.zonesObserved && (
+            <p className="text-sm text-muted">
+              <strong>Zones observées :</strong> {t(s.zonesObserved)}
+            </p>
+          )}
+          {s.groups.map((g) => (
+            <div key={g.title} className="mt-3">
+              <h4 className="font-bold text-brand-dark">{t(g.title)}</h4>
+              {g.issues.map((l, i) => (
+                <div key={i}>
+                  <p>{t(l.text)}</p>
+                  {l.comments.map((c, j) => (
+                    <p key={j} className="ml-4 text-sm italic text-muted">
+                      {t(c)}
+                    </p>
                   ))}
                 </div>
               ))}
-              {b.remarks.length > 0 && (
-                <div className="mt-1">
-                  <h5 className="font-medium underline">Remarques</h5>
-                  {b.remarks.map((r, i) => (
-                    <p key={i}>{t(r)}</p>
-                  ))}
-                </div>
-              )}
-              {b.photos.length > 0 && (
-                <div className="mt-1">
-                  <h5 className="font-medium underline">Photos</h5>
-                  <div className="grid grid-cols-2 gap-3">
-                    {b.photos.map((p) => (
-                      <figure key={p.url}>
-                        <img src={p.url} alt={p.caption} className="w-full rounded-lg" />
-                        <figcaption className="text-sm text-muted">{t(p.caption)}</figcaption>
-                      </figure>
-                    ))}
-                  </div>
-                </div>
+              {g.ok.length > 0 && (
+                <p className="mt-1 text-sm text-muted">
+                  <strong>En ordre :</strong> {t(g.ok.join(" "))}
+                </p>
               )}
             </div>
           ))}
+          {s.remarks.length > 0 && (
+            <div className="mt-3">
+              <h4 className="font-bold text-brand-dark">Remarques</h4>
+              {s.remarks.map((r, i) => (
+                <p key={i}>{t(r)}</p>
+              ))}
+            </div>
+          )}
+          {s.photos.length > 0 && (
+            <div className="mt-3">
+              <h4 className="font-bold text-brand-dark">Photos</h4>
+              <div className="grid grid-cols-3 gap-2">
+                {s.photos.map((p) => (
+                  <figure key={p.url}>
+                    <img src={p.url} alt={p.caption} className="w-full rounded-lg" />
+                    <figcaption className="text-xs text-muted">{t(p.caption)}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       ))}
 

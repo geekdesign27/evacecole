@@ -80,20 +80,16 @@ export interface ReportPhoto {
   caption: string;
 }
 
-/** A titled group of sentences inside a block (e.g. « Technique »). */
+/**
+ * One compiled topic of the report (« Personne interpellée », « Comportement dans les étages »,
+ * « Technique »): answers of the whole team merged point by point.
+ */
 export interface ReportGroup {
   title: string;
-  lines: ReportLine[];
-}
-
-/** One observation block: the interpellated person first, then one block per zone. */
-export interface ReportBlock {
-  title: string;
-  /** « Observé par … » */
-  observers: string;
-  groups: ReportGroup[];
-  remarks: string[];
-  photos: ReportPhoto[];
+  /** Points to improve (with the zones concerned), and points carrying a comment. */
+  issues: ReportLine[];
+  /** Compliant points without comment, printed as one run-in paragraph. */
+  ok: string[];
 }
 
 export interface SchoolReport {
@@ -103,8 +99,10 @@ export interface SchoolReport {
   /** Notes typed on the timeline (« Alarme pompiers : bouton défectueux… »). */
   timingNotes: string[];
   summary: string;
-  blocks: ReportBlock[];
-  /** Every photo of the school, for export asset loading. */
+  /** « Rez (Cyril Egger), 1er étage (Jean-Pierre Nussbaumer) » */
+  zonesObserved: string;
+  groups: ReportGroup[];
+  remarks: string[];
   photos: ReportPhoto[];
   okCount: number;
   issueCount: number;
@@ -331,51 +329,29 @@ function buildPhotos(obs: ObservationInput[]): ReportPhoto[] {
 
 const observerName = (o: ObservationInput) => o.observer.trim() || "Observateur·rice";
 
-/** Answered points of one role for a group of observations (N/A and blanks left out). */
-function blockGroups(role: Role, obs: ObservationInput[]): ReportGroup[] {
-  const groups: ReportGroup[] = [];
-  for (const section of SECTIONS.filter((x) => x.role === role)) {
-    const lines: ReportLine[] = [];
-    for (const item of section.items) {
-      const syn = synthesizeItem(item, obs, observerName);
-      if (syn.line && syn.status !== "missing" && syn.status !== "na") lines.push(syn.line);
-    }
-    if (lines.length) groups.push({ title: section.title, lines });
-  }
-  return groups;
-}
-
-function buildBlock(title: string, role: Role, obs: ObservationInput[]): ReportBlock {
-  return {
-    title,
-    observers: `Observé par ${joinFr(uniq(obs.map(observerName)))}`,
-    groups: blockGroups(role, obs),
-    remarks: obs.filter((o) => o.remarks?.trim()).map((o) => `${o.remarks!.trim()} ${attribution(o)}`),
-    photos: buildPhotos(obs),
-  };
-}
-
 function zoneOrder(zone: string): number {
   const i = ZONES.indexOf(zone);
   return i === -1 ? ZONES.length : i;
 }
 
-function buildBlocks(obs: ObservationInput[]): ReportBlock[] {
-  const blocks: ReportBlock[] = [];
-  const leads = obs.filter((o) => o.role === "lead");
-  if (leads.length) blocks.push(buildBlock("Personne interpellée", "lead", leads));
-
-  const byZone = new Map<string, ObservationInput[]>();
+/** « Rez (Cyril Egger), 1er étage (Jean-Pierre Nussbaumer et Yves Sulger) » in building order. */
+function buildZonesObserved(obs: ObservationInput[]): string {
+  const byZone = new Map<string, string[]>();
   for (const o of obs.filter((x) => x.role === "obs")) {
-    const key = o.zone?.trim() || `Zone de ${observerName(o)}`;
-    byZone.set(key, [...(byZone.get(key) ?? []), o]);
+    const z = o.zone?.trim() || "zone non précisée";
+    byZone.set(z, uniq([...(byZone.get(z) ?? []), observerName(o)]));
   }
-  const zones = [...byZone.keys()].sort((a, b) => zoneOrder(a) - zoneOrder(b) || a.localeCompare(b, "fr"));
-  for (const z of zones) blocks.push(buildBlock(z, "obs", byZone.get(z)!));
-
-  // A block with nothing in it would only print a title.
-  return blocks.filter((b) => b.groups.length || b.remarks.length || b.photos.length);
+  return [...byZone.entries()]
+    .sort(([a], [b]) => zoneOrder(a) - zoneOrder(b) || a.localeCompare(b, "fr"))
+    .map(([z, names]) => `${z} (${joinFr(names)})`)
+    .join(", ");
 }
+
+const GROUPS: { title: string; sections: string[] }[] = [
+  { title: "Personne interpellée", sections: ["reaction", "organisation"] },
+  { title: "Comportement dans les étages", sections: ["comportement"] },
+  { title: "Technique", sections: ["technique"] },
+];
 
 export function buildSchoolReport(ex: ExerciseInput, allObs: ObservationInput[]): SchoolReport {
   const obs = allObs.filter((o) => o.exerciseId === ex._id);
@@ -383,30 +359,43 @@ export function buildSchoolReport(ex: ExerciseInput, allObs: ObservationInput[])
   let issueCount = 0;
   const missing: SchoolReport["missing"] = [];
   const recoKeys = new Set<RecoKey>();
+  const groups: ReportGroup[] = [];
 
-  // Counts and suggestions use the whole team's answers per point.
-  for (const section of SECTIONS) {
-    const roleObs = obs.filter((o) => o.role === section.role);
-    for (const item of section.items) {
-      const syn = synthesizeItem(item, roleObs);
-      if (syn.status === "ok") okCount++;
-      if (syn.status === "issue") {
-        issueCount++;
-        if (item.reco) recoKeys.add(item.reco);
+  for (const g of GROUPS) {
+    const group: ReportGroup = { title: g.title, issues: [], ok: [] };
+    for (const section of SECTIONS.filter((x) => g.sections.includes(x.id))) {
+      const roleObs = obs.filter((o) => o.role === section.role);
+      for (const item of section.items) {
+        const syn = synthesizeItem(item, roleObs);
+        if (syn.status === "ok") okCount++;
+        if (syn.status === "issue") {
+          issueCount++;
+          if (item.reco) recoKeys.add(item.reco);
+        }
+        if (syn.status === "missing") missing.push({ itemId: item.id, label: item.label, role: section.role });
+        if (!syn.line) continue;
+        if (syn.status === "ok" && syn.line.comments.length === 0) group.ok.push(syn.line.text);
+        else if (syn.status !== "na" || syn.line.comments.length) group.issues.push(syn.line);
       }
-      if (syn.status === "missing") missing.push({ itemId: item.id, label: item.label, role: section.role });
     }
+    if (group.issues.length || group.ok.length) groups.push(group);
   }
 
-  const blocks = buildBlocks(obs);
+  const remarks = obs
+    .filter((o) => o.remarks?.trim())
+    .sort((a, b) => (a.role === b.role ? zoneOrder(a.zone ?? "") - zoneOrder(b.zone ?? "") : a.role === "lead" ? -1 : 1))
+    .map((o) => `${o.remarks!.trim()} ${attribution(o)}`);
+
   return {
     exerciseId: ex._id,
     school: ex.school,
     facts: buildFacts(ex),
     timingNotes: buildTimingNotes(ex),
     summary: buildSummary(ex, okCount, issueCount),
-    blocks,
-    photos: blocks.flatMap((b) => b.photos),
+    zonesObserved: buildZonesObserved(obs),
+    groups,
+    remarks,
+    photos: buildPhotos(obs),
     okCount,
     issueCount,
     missing,
