@@ -284,6 +284,7 @@ export async function renderDocx(
   );
   children.push(heading("Introduction", HeadingLevel.HEADING_2), ...richParagraphs(model.intro));
   children.push(heading("Objectif", HeadingLevel.HEADING_2), ...richParagraphs(model.objective));
+  children.push(heading("Critères d'évaluation", HeadingLevel.HEADING_2), ...richParagraphs(model.criteria));
   for (const s of model.schools) children.push(...schoolBlock(s, model, assets));
   if (model.recommendations) {
     children.push(heading("Recommandations", HeadingLevel.HEADING_2), ...richParagraphs(model.recommendations));

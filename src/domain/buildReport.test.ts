@@ -251,6 +251,14 @@ describe("buildReport", () => {
     expect(r.schools[0].groups[0].ok).toEqual([]);
   });
 
+  it("pre-fills the evaluation criteria from the checklist, and keeps an edited version", () => {
+    for (const i of ALL_ITEMS) expect(report.criteria).toContain(i.label.replace(/'/g, "'"));
+    expect(report.criteria).toContain("<h3>Personne interpellée</h3>");
+    expect(report.criteria).toContain("<h3>Technique</h3>");
+    const edited = buildReport([exercise], [lead], { fields: { criteria: "<p>Mes critères</p>" } });
+    expect(edited.criteria).toBe("<p>Mes critères</p>");
+  });
+
   it("keeps timing notes attributed", () => {
     expect(school.timingNotes).toEqual(["Alarme pompiers : bouton défectueux, alarme en porte-à-porte (PA Schütz, Rez)"]);
   });

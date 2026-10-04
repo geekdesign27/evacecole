@@ -278,6 +278,12 @@ function ReportEditor({
             onChange={(v) => edit("objective", v)}
           />
           <Field
+            label="Critères d'évaluation"
+            rows={8}
+            value={shown("criteria")}
+            onChange={(v) => edit("criteria", v)}
+          />
+          <Field
             label="Recommandations"
             rows={8}
             value={shown("recommendations")}
@@ -429,6 +435,8 @@ function Preview({ model }: { model: ReportModel }) {
       <RichView value={model.intro} />
       <h3 className="mt-4 text-lg font-bold text-brand">Objectif</h3>
       <RichView value={model.objective} />
+      <h3 className="mt-4 text-lg font-bold text-brand">Critères d'évaluation</h3>
+      <RichView value={model.criteria} />
 
       {model.schools.map((s) => (
         <section key={s.exerciseId} className="mt-4">

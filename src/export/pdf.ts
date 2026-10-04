@@ -35,16 +35,32 @@ function pdfRuns(runs: RichRun[]): Content[] {
   );
 }
 
+function pdfList(kind: "ul" | "ol", items: RichRun[][]): Content {
+  const li = (it: RichRun[]) => ({ text: pdfRuns(it), margin: [0, 0, 0, 1] });
+  // Long lists (e.g. the evaluation criteria) on two columns to save space.
+  if (items.length > 6) {
+    const half = Math.ceil(items.length / 2);
+    const first = items.slice(0, half).map(li);
+    const second = items.slice(half).map(li);
+    const second2 = kind === "ol" ? { ol: second, start: half + 1 } : { ul: second };
+    return {
+      columns: [{ [kind]: first }, second2],
+      columnGap: 14,
+      fontSize: 9.5,
+      margin: [0, 0, 0, 5],
+    } as unknown as Content;
+  }
+  return ({ [kind]: items.map(li), margin: [0, 0, 0, 6] } as unknown) as Content;
+}
+
 /** Rich report field to pdfmake paragraphs and lists. */
 function richContent(value: string): Content[] {
   return mapRuns(parseRich(value), t).map((b) =>
     b.kind === "p"
-      ? ({ text: pdfRuns(b.runs), margin: [0, 0, 0, 5] } as Content)
+      ? ({ text: pdfRuns(b.runs), margin: [0, 0, 0, 4] } as Content)
       : b.kind === "h"
-        ? ({ text: pdfRuns(b.runs), bold: true, fontSize: 11.5, margin: [0, 6, 0, 3] } as Content)
-      : b.kind === "ul"
-        ? ({ ul: b.items.map((it) => ({ text: pdfRuns(it), margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 6] } as Content)
-        : ({ ol: b.items.map((it) => ({ text: pdfRuns(it), margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 6] } as Content),
+        ? ({ text: pdfRuns(b.runs), bold: true, fontSize: 11, margin: [0, 5, 0, 2] } as Content)
+        : pdfList(b.kind, b.items),
   );
 }
 
@@ -154,6 +170,7 @@ export function buildPdfDefinition(model: ReportModel, assets: ExportAssets): TD
   const content: Content[] = [header, infoTable(model)];
   content.push(...richSection("Introduction", model.intro));
   content.push(...richSection("Objectif", model.objective));
+  content.push(...richSection("Critères d'évaluation", model.criteria));
   model.schools.forEach((s) => content.push(...schoolBlock(s, model, assets)));
   if (model.recommendations) {
     content.push(...richSection("Recommandations", model.recommendations));

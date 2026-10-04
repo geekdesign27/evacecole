@@ -14,7 +14,7 @@ import {
   type Role,
   type TimeField,
 } from "./checklist";
-import { isRichEmpty } from "./rich";
+import { escapeHtml, isRichEmpty } from "./rich";
 import {
   fmtDateLong,
   fmtDateShort,
@@ -65,6 +65,7 @@ export interface ReportFields {
   author?: string;
   intro?: string;
   objective?: string;
+  criteria?: string;
   conclusion?: string;
   /** Free text written by the report author, one paragraph per line. */
   recommendations?: string;
@@ -121,6 +122,8 @@ export interface ReportModel {
   author: string;
   intro: string;
   objective: string;
+  /** Evaluation criteria (rich text), pre-filled from the checklist. */
+  criteria: string;
   conclusion: string;
   schools: SchoolReport[];
   /** Rich text (HTML) or plain text from the author; empty means no recommendation section. */
@@ -347,11 +350,37 @@ function buildZonesObserved(obs: ObservationInput[]): string {
     .join(", ");
 }
 
-const GROUPS: { title: string; sections: string[] }[] = [
-  { title: "Personne interpellée", sections: ["reaction", "organisation"] },
-  { title: "Comportement dans les étages", sections: ["comportement"] },
-  { title: "Technique", sections: ["technique"] },
+const GROUPS: { title: string; sections: string[]; who: string }[] = [
+  {
+    title: "Personne interpellée",
+    sections: ["reaction", "organisation"],
+    who: "Évalué par l'interpellateur, qui suit la personne interpellée sans l'aider.",
+  },
+  {
+    title: "Comportement dans les étages",
+    sections: ["comportement"],
+    who: "Évalué par les observateurs, chacun dans sa zone.",
+  },
+  {
+    title: "Technique",
+    sections: ["technique"],
+    who: "Évalué par les observateurs, chacun dans sa zone.",
+  },
 ];
+
+/** Default « Critères d'évaluation » text, generated from the checklist so both always match. */
+export function defaultCriteria(): string {
+  const intro =
+    "Chaque point est évalué sur place et noté Oui (conforme), Partiel ou Non, ou Sans objet lorsqu'il ne s'applique pas. Le rapport reprend les points évalués : ceux à améliorer avec les zones concernées, puis ceux en ordre.";
+  const parts = [`<p>${escapeHtml(intro)}</p>`];
+  for (const g of GROUPS) {
+    const items = SECTIONS.filter((x) => g.sections.includes(x.id)).flatMap((x) => x.items);
+    parts.push(`<h3>${escapeHtml(g.title)}</h3>`);
+    parts.push(`<p>${escapeHtml(g.who)}</p>`);
+    parts.push(`<ul>${items.map((i) => `<li><p>${escapeHtml(i.label)}</p></li>`).join("")}</ul>`);
+  }
+  return parts.join("");
+}
 
 export function buildSchoolReport(ex: ExerciseInput, allObs: ObservationInput[]): SchoolReport {
   const obs = allObs.filter((o) => o.exerciseId === ex._id);
@@ -445,6 +474,7 @@ export function buildReport(
       fields.intro?.trim() ||
       (exDate ? defaultIntro(mode, exDate, schoolNames) : ""),
     objective: fields.objective?.trim() || DEFAULT_OBJECTIVE,
+    criteria: isRichEmpty(fields.criteria) ? defaultCriteria() : fields.criteria!.trim(),
     conclusion: fields.conclusion?.trim() || DEFAULT_CONCLUSION,
     schools,
     recommendations: isRichEmpty(fields.recommendations) ? "" : (fields.recommendations ?? "").trim(),

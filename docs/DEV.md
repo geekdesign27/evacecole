@@ -53,7 +53,7 @@ Variable d'environnement Convex de production : `TEAM_CODE` (Dashboard Convex, S
   (vignettes, 3 par ligne) en fin de section. En rapport de journée, chaque école commence sur une nouvelle page.
 - **Recommandations** : texte libre de l'auteur. Les recommandations déduites des points Partiel/Non sont proposées
   par le bouton « Insérer les suggestions ».
-- **Objectif** : section séparée et éditable sous l'introduction.
+- **Objectif** et **Critères d'évaluation** : sections éditables sous l'introduction. Les critères sont préremplis depuis `checklist.ts` (`defaultCriteria`), donc toujours alignés sur la grille.
 - **Suppression d'exercice** : réservée à la page « Gestion », définitive (saisies et photos comprises).
 
 - Table `dayReports` ajoutée : textes éditables du rapport de journée (un rapport de journée n'appartient à aucun exercice).
