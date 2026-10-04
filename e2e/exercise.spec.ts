@@ -120,8 +120,9 @@ test("full exercise with three phones, offline safety and both exports", async (
   await lead.getByRole("link", { name: "Synthèse" }).click();
   const preview = lead.getByRole("article", { name: "Aperçu du rapport" });
   await expect(preview).toContainText(`Rapport d'exercice d'évacuation : ${school}`);
-  await expect(preview.getByRole("heading", { name: "Personne interpellée", exact: true })).toBeVisible();
-  await expect(preview.getByRole("heading", { name: "Comportement dans les étages" })).toBeVisible();
+  // Once in the evaluation criteria, once in the school section
+  await expect(preview.getByRole("heading", { name: "Personne interpellée", exact: true })).toHaveCount(2);
+  await expect(preview.getByRole("heading", { name: "Comportement dans les étages" })).toHaveCount(2);
   await expect(preview).toContainText("Rez (Luc Morel), 1er étage (Anne Dupont)");
   await expect(preview).toContainText("Quelques portes sont restées ouvertes (1er étage). En ordre : Rez.");
   await expect(preview).toContainText("Objectif");
