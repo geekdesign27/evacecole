@@ -40,16 +40,20 @@ function schoolBlock(s: SchoolReport, model: ReportModel, assets: ExportAssets):
   });
   out.push({ text: t(s.summary), bold: true, margin: [0, 0, 0, 8] });
   if (s.sections.length) out.push({ text: "Observations", style: "h3" });
+  // Each section is kept on one page so a heading is never left alone at the bottom.
   for (const sec of s.sections) {
-    out.push({ text: t(sec.title), style: "h4" });
+    const stack: Content[] = [{ text: t(sec.title), style: "h4" }];
     for (const line of sec.lines) {
-      out.push({ text: t(line.text), margin: [0, 0, 0, 2] });
-      for (const c of line.comments) out.push({ text: t(c), italics: true, color: MUTED, margin: [12, 0, 0, 2] });
+      stack.push({ text: t(line.text), margin: [0, 0, 0, 2] });
+      for (const c of line.comments) stack.push({ text: t(c), italics: true, color: MUTED, margin: [12, 0, 0, 2] });
     }
+    out.push({ stack, unbreakable: true });
   }
   if (s.remarks.length) {
-    out.push({ text: "Remarques", style: "h4" });
-    for (const r of s.remarks) out.push({ text: t(r), margin: [0, 0, 0, 3] });
+    out.push({
+      stack: [{ text: "Remarques", style: "h4" }, ...s.remarks.map((r) => ({ text: t(r), margin: [0, 0, 0, 3] }) as Content)],
+      unbreakable: s.remarks.length < 8,
+    });
   }
   const photos = s.photos.filter((p) => assets.photos.has(p.url));
   if (photos.length) {

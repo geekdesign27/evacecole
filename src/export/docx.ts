@@ -27,6 +27,9 @@ const BRAND = "C71A1A";
 const MUTED = "5F6672";
 const LINE = "D5D8DE";
 
+// A4 width (11906 twips) minus left and right margins (1100 each)
+const CONTENT_WIDTH = 11906 - 2 * 1100;
+
 const border = { style: BorderStyle.SINGLE, size: 4, color: LINE };
 const borders = { top: border, bottom: border, left: border, right: border };
 
@@ -35,15 +38,15 @@ function kvTable(
   labelPct = 35,
 ): Table {
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    columnWidths: [labelPct * 90, (100 - labelPct) * 90],
+    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
+    columnWidths: [Math.round((CONTENT_WIDTH * labelPct) / 100), Math.round((CONTENT_WIDTH * (100 - labelPct)) / 100)],
     rows: rows.map(
       (r, i) =>
         new TableRow({
           children: [
             new TableCell({
               borders,
-              width: { size: labelPct, type: WidthType.PERCENTAGE },
+              width: { size: Math.round((CONTENT_WIDTH * labelPct) / 100), type: WidthType.DXA },
               shading:
                 i % 2
                   ? { type: ShadingType.CLEAR, fill: "F7F8FA", color: "auto" }
@@ -56,7 +59,7 @@ function kvTable(
             }),
             new TableCell({
               borders,
-              width: { size: 100 - labelPct, type: WidthType.PERCENTAGE },
+              width: { size: Math.round((CONTENT_WIDTH * (100 - labelPct)) / 100), type: WidthType.DXA },
               shading:
                 i % 2
                   ? { type: ShadingType.CLEAR, fill: "F7F8FA", color: "auto" }
@@ -212,6 +215,13 @@ export async function renderDocx(
         },
       },
       paragraphStyles: [
+        {
+          id: "Normal",
+          name: "Normal",
+          quickFormat: true,
+          run: { font: "Arial", size: 21 },
+          paragraph: { spacing: { after: 80, line: 276 } },
+        },
         {
           id: "Heading2",
           name: "Heading 2",
