@@ -35,9 +35,10 @@ h1, h2, h3, .font-display {
   font-variant-numeric: tabular-nums;
 }
 
-input, textarea, select, button {
-  font: inherit;
-  color: inherit;
+@layer base {
+  input, textarea, select, button {
+    font: inherit;
+  }
 }
 
 /* Visible focus for keyboard users, invisible for touch */

@@ -7,6 +7,8 @@ import { defineConfig } from "vite";
 export default defineConfig(({ command }) => ({
   base: command === "build" ? "/evacecole/" : "/",
   plugins: [react(), tailwindcss()],
+  // pdfmake and docx are lazy-loaded only when exporting
+  build: { chunkSizeWarningLimit: 1500 },
   test: {
     include: ["src/**/*.test.ts"],
   },

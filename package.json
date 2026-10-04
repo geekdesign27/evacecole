@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "convex:local": "CONVEX_AGENT_MODE=anonymous npx convex dev",
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",

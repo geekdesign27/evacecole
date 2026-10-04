@@ -10,6 +10,7 @@ import { ErrorBox } from "./components/ui";
 import { Home } from "./pages/Home";
 import { ExercisePage } from "./pages/Exercise";
 import { DayReportPage, SchoolReportPage } from "./pages/Report";
+import { PaperSheet } from "./pages/PaperSheet";
 
 function App() {
   if (!convexConfigured) {
@@ -23,15 +24,23 @@ function App() {
     <ConvexProvider client={convex}>
       <TeamProvider>
         <HashRouter>
-          <TeamGate>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/x/:id" element={<ExercisePage />} />
-              <Route path="/rapport/jour/:date" element={<DayReportPage />} />
-              <Route path="/rapport/:id" element={<SchoolReportPage />} />
-              <Route path="*" element={<Home />} />
-            </Routes>
-          </TeamGate>
+          <Routes>
+            <Route path="/fiche" element={<PaperSheet />} />
+            <Route
+              path="*"
+              element={
+                <TeamGate>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/x/:id" element={<ExercisePage />} />
+                    <Route path="/rapport/jour/:date" element={<DayReportPage />} />
+                    <Route path="/rapport/:id" element={<SchoolReportPage />} />
+                    <Route path="*" element={<Home />} />
+                  </Routes>
+                </TeamGate>
+              }
+            />
+          </Routes>
         </HashRouter>
       </TeamProvider>
     </ConvexProvider>

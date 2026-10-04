@@ -18,7 +18,7 @@ rapport rédigé en PDF et Word.
 - PWA légère (manifest + icône). Hors ligne : seulement la non-perte (brouillon localStorage).
 - Exports côté navigateur : PDF avec **pdfmake** (Roboto), Word avec **docx** (Arial).
 - Tests : **Vitest** (buildReport, formats), **Playwright** (scénario 3 contextes, viewport iPhone).
-- Serveurs de dev : toujours via **Portly** (voir config globale).
+- Serveurs de dev : toujours via **Portly** (projet `evacecole`, voir docs/DEV.md).
 
 ## Fichiers contrat
 
@@ -98,7 +98,7 @@ Logo : fourni par PA (`logoMoncor.svg`), copié dans `public/logo.svg`.
 
 ## Plan de travail
 
-0. CLAUDE.md + docs/SPEC.md ✔
+0. CLAUDE.md + docs/SPEC.md ✔ (écarts assumés : voir docs/DEV.md)
 1. Scaffold, charte, HashRouter, workflow Pages
 2. Données et temps réel, code d'équipe, accueil, création, rejoindre, QR
 3. Écran exercice : chrono, timeline, grille, commentaires, photos, équipe, brouillon hors ligne
