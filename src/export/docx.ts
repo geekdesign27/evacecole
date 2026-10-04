@@ -77,7 +77,7 @@ let numberedListInstance = 0;
 
 function richRuns(runs: RichRun[]): TextRun[] {
   return runs.map((r) =>
-    r.text === "\n" ? new TextRun({ text: "", break: 1 }) : new TextRun({ text: r.text, bold: r.bold, italics: r.italic }),
+    r.text === "\n" ? new TextRun({ text: "", break: 1 }) : new TextRun({ text: r.text, bold: r.bold, italics: r.italic, underline: r.underline ? {} : undefined }),
   );
 }
 
@@ -87,6 +87,8 @@ function richParagraphs(value: string): Paragraph[] {
   for (const b of mapRuns(parseRich(value), t)) {
     if (b.kind === "p") {
       out.push(new Paragraph({ spacing: { after: 120 }, children: richRuns(b.runs) }));
+    } else if (b.kind === "h") {
+      out.push(new Paragraph({ heading: HeadingLevel.HEADING_4, children: richRuns(b.runs) }));
     } else {
       // Each numbered list restarts at 1.
       const instance = b.kind === "ol" ? ++numberedListInstance : 0;

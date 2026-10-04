@@ -1,16 +1,20 @@
 // Rich text for the editable report fields (introduction, objective, recommendations, conclusion).
 // Stored as HTML from the editor, but NEVER injected as HTML: it is parsed into this small
-// whitelist structure (paragraphs, bold, italic, bullet and numbered lists) and rendered from it.
+// whitelist structure (paragraphs, sub-headings, bold, italic, underline, bullet and numbered
+// lists) and rendered from it.
 // Plain text values (older reports, default texts) are accepted too.
 
 export interface RichRun {
   text: string;
   bold?: boolean;
   italic?: boolean;
+  underline?: boolean;
 }
 
 export type RichBlock =
-  { kind: "p"; runs: RichRun[] } | { kind: "ul" | "ol"; items: RichRun[][] };
+  | { kind: "p"; runs: RichRun[] }
+  | { kind: "h"; runs: RichRun[] }
+  | { kind: "ul" | "ol"; items: RichRun[][] };
 
 export type RichDoc = RichBlock[];
 
@@ -33,7 +37,7 @@ export function plainToHtml(text: string): string {
 }
 
 export function isHtml(value: string): boolean {
-  return /^\s*<(p|ul|ol)[\s>]/i.test(value);
+  return /^\s*<(p|ul|ol|h3)[\s>]/i.test(value);
 }
 
 /** Editor value for any stored value (HTML kept, plain text converted). */
@@ -43,7 +47,7 @@ export function toEditorHtml(value: string): string {
 
 function runsOf(
   node: Node,
-  marks: { bold?: boolean; italic?: boolean } = {},
+  marks: { bold?: boolean; italic?: boolean; underline?: boolean } = {},
 ): RichRun[] {
   const out: RichRun[] = [];
   node.childNodes.forEach((child) => {
@@ -54,6 +58,7 @@ function runsOf(
           text,
           ...(marks.bold ? { bold: true } : {}),
           ...(marks.italic ? { italic: true } : {}),
+          ...(marks.underline ? { underline: true } : {}),
         });
       return;
     }
@@ -66,6 +71,7 @@ function runsOf(
     const next = {
       bold: marks.bold || tag === "strong" || tag === "b",
       italic: marks.italic || tag === "em" || tag === "i",
+      underline: marks.underline || tag === "u",
     };
     // Unknown tags keep their text only (whitelist).
     out.push(...runsOf(child, next));
@@ -108,7 +114,8 @@ export function parseRich(value: string | undefined): RichDoc {
       return;
     }
     const runs = trimRuns(runsOf(el));
-    if (runs.some((r) => r.text.trim())) blocks.push({ kind: "p", runs });
+    const kind: "h" | "p" = /^h[1-6]$/.test(tag) ? "h" : "p";
+    if (runs.some((r) => r.text.trim())) blocks.push({ kind, runs } as RichBlock);
   });
   return blocks;
 }
@@ -124,8 +131,8 @@ export function isRichEmpty(value: string | undefined): boolean {
 /** Applies a text transform (e.g. Swiss typography) to every run. */
 export function mapRuns(doc: RichDoc, fn: (s: string) => string): RichDoc {
   return doc.map((b) =>
-    b.kind === "p"
-      ? { kind: "p", runs: b.runs.map((r) => ({ ...r, text: fn(r.text) })) }
+    "runs" in b
+      ? ({ kind: b.kind, runs: b.runs.map((r) => ({ ...r, text: fn(r.text) })) } as RichBlock)
       : {
           kind: b.kind,
           items: b.items.map((it) =>

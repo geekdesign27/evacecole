@@ -145,9 +145,14 @@ test("demo report", async ({ browser }) => {
   const reco = lead.getByRole("textbox", { name: "Recommandations" });
   const bar = lead.getByRole("toolbar", { name: "Mise en forme : Recommandations" });
   await reco.click();
-  await bar.getByRole("button", { name: "Gras" }).click();
-  await lead.keyboard.type("Priorités pour la prochaine rentrée :");
-  await bar.getByRole("button", { name: "Gras" }).click();
+  await bar.getByRole("button", { name: "Sous-titre" }).click();
+  await lead.keyboard.type("Priorités pour la prochaine rentrée");
+  await lead.keyboard.press("Enter");
+  await lead.keyboard.type("À traiter ");
+  await bar.getByRole("button", { name: "Souligné" }).click();
+  await lead.keyboard.type("avant le prochain exercice");
+  await bar.getByRole("button", { name: "Souligné" }).click();
+  await lead.keyboard.type(" :");
   await lead.keyboard.press("Enter");
   await bar.getByRole("button", { name: "Liste à puces" }).click();
   await lead.keyboard.type("retrouver le gilet et le classeur d'évacuation au secrétariat ;");
@@ -157,7 +162,9 @@ test("demo report", async ({ browser }) => {
   await lead.keyboard.press("Enter");
   await lead.getByRole("button", { name: /Insérer les suggestions/ }).click();
   const preview = lead.getByRole("article", { name: "Aperçu du rapport" });
-  await expect(preview.locator("strong", { hasText: "Priorités pour la prochaine rentrée" })).toBeVisible();
+  await expect(preview.locator("h4", { hasText: "Priorités pour la prochaine rentrée" })).toBeVisible();
+  await expect(preview.locator("u", { hasText: "avant le prochain exercice" })).toBeVisible();
+  await lead.screenshot({ path: `${OUT}/editeur.png`, clip: await reco.locator("xpath=../..").boundingBox() ?? undefined });
   await expect(preview.locator("ul li", { hasText: "coin en bois" })).toBeVisible();
   await expect(lead.getByRole("article", { name: "Aperçu du rapport" })).toContainText("Proscrire le calage");
   for (const [button, ext] of [["Télécharger PDF", "pdf"], ["Télécharger Word", "docx"]] as const) {

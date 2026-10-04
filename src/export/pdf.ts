@@ -29,7 +29,9 @@ function infoTable(model: ReportModel): Content {
 }
 
 function pdfRuns(runs: RichRun[]): Content[] {
-  return runs.map((r) => ({ text: r.text, bold: r.bold, italics: r.italic }) as Content);
+  return runs.map(
+    (r) => ({ text: r.text, bold: r.bold, italics: r.italic, decoration: r.underline ? "underline" : undefined }) as Content,
+  );
 }
 
 /** Rich report field to pdfmake paragraphs and lists. */
@@ -37,6 +39,8 @@ function richContent(value: string): Content[] {
   return mapRuns(parseRich(value), t).map((b) =>
     b.kind === "p"
       ? ({ text: pdfRuns(b.runs), margin: [0, 0, 0, 5] } as Content)
+      : b.kind === "h"
+        ? ({ text: pdfRuns(b.runs), bold: true, fontSize: 11.5, margin: [0, 6, 0, 3] } as Content)
       : b.kind === "ul"
         ? ({ ul: b.items.map((it) => ({ text: pdfRuns(it), margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 6] } as Content)
         : ({ ol: b.items.map((it) => ({ text: pdfRuns(it), margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 6] } as Content),

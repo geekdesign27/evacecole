@@ -11,6 +11,13 @@ describe("rich text", () => {
     ]);
   });
 
+  it("parses underline and sub-headings", () => {
+    expect(parseRich("<h3>Priorités</h3><p><u>souligné</u></p>")).toEqual([
+      { kind: "h", runs: [{ text: "Priorités" }] },
+      { kind: "p", runs: [{ text: "souligné", underline: true }] },
+    ]);
+  });
+
   it("keeps only whitelisted content (no script, no attributes, no links)", () => {
     const doc = parseRich('<p>ok<img src=x onerror="alert(1)"><script>alert(2)</script><a href="javascript:x">lien</a></p>');
     expect(JSON.stringify(doc)).not.toMatch(/onerror|javascript|<|img/);

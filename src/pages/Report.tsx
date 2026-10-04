@@ -521,6 +521,7 @@ function Runs({ runs }: { runs: RichRun[] }) {
         if (r.text === "\n") return <br key={i} />;
         let node: React.ReactNode = r.text;
         if (r.italic) node = <em>{node}</em>;
+        if (r.underline) node = <u>{node}</u>;
         if (r.bold) node = <strong>{node}</strong>;
         return <span key={i}>{node}</span>;
       })}
@@ -538,6 +539,10 @@ function RichView({ value }: { value: string }) {
           <p key={i}>
             <Runs runs={b.runs} />
           </p>
+        ) : b.kind === "h" ? (
+          <h4 key={i} className="mt-2 font-bold">
+            <Runs runs={b.runs} />
+          </h4>
         ) : b.kind === "ul" ? (
           <ul key={i}>
             {b.items.map((it, j) => (
