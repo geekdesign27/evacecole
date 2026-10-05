@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -55,7 +56,7 @@ function ExerciseCard({ ex, adminToken }: { ex: Doc<"exercises">; adminToken?: s
         {adminToken && (
           <button
             type="button"
-            className="min-w-12 rounded-2xl border-2 border-line bg-card px-2 text-sm font-medium text-brand"
+            className="flex min-w-12 items-center justify-center rounded-2xl border-2 border-line bg-card px-3 text-brand"
             aria-label={`Supprimer l'exercice ${ex.school}`}
             onClick={async () => {
               if (!window.confirm(`Supprimer définitivement « ${ex.school} » et toutes ses saisies ?`)) return;
@@ -66,7 +67,7 @@ function ExerciseCard({ ex, adminToken }: { ex: Doc<"exercises">; adminToken?: s
               }
             }}
           >
-            Supprimer
+            <Trash2 size={22} />
           </button>
         )}
       </div>

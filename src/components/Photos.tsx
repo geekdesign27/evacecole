@@ -5,6 +5,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { resizeToJpeg } from "../lib/images";
 import { device } from "../lib/storage";
 import { Button } from "./ui";
+import { Camera, X } from "lucide-react";
 import { errorMessage } from "../lib/errors";
 
 // Object URLs of photos taken on this device, so thumbnails show before the server URL arrives.
@@ -76,12 +77,21 @@ export function PhotoButton({
     <>
       <Button
         variant="secondary"
-        className={compact ? "min-w-12 px-3" : ""}
+        className={compact ? "flex min-w-12 items-center justify-center px-3" : ""}
         onClick={open}
         disabled={busy}
         aria-label={compact ? "Ajouter une photo" : undefined}
       >
-        {busy ? "Envoi…" : compact ? "📷" : `📷 ${label}`}
+        {busy ? (
+          "Envoi…"
+        ) : compact ? (
+          <Camera size={22} />
+        ) : (
+          <span className="flex items-center gap-2">
+            <Camera size={20} />
+            {label}
+          </span>
+        )}
       </Button>
       <input
         ref={inputRef}
@@ -159,7 +169,7 @@ export function Thumbs({
                 className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ink text-white"
                 aria-label="Retirer la photo"
               >
-                ×
+                <X size={18} />
               </button>
             )}
           </div>

@@ -9,6 +9,7 @@ import {
 import type { Draft } from "../lib/sync";
 import { PhotoButton, Thumbs } from "./Photos";
 import { Card } from "./ui";
+import { MessageSquare, MessageSquareText } from "lucide-react";
 
 const OPTIONS: { v: AnswerValue; label: string; on: string }[] = [
   { v: "ok", label: "Oui", on: "bg-ok text-white border-ok" },
@@ -111,9 +112,9 @@ function ItemRow({
           onClick={() => setShowComment((s) => !s)}
           aria-expanded={showComment}
           aria-label="Commentaire"
-          className={`min-h-12 min-w-12 rounded-xl border-2 ${answer.c ? "border-ink bg-bg" : "border-line bg-white"}`}
+          className={`flex min-h-12 min-w-12 items-center justify-center rounded-xl border-2 ${answer.c ? "border-ink bg-bg" : "border-line bg-white"}`}
         >
-          💬
+          {answer.c ? <MessageSquareText size={22} /> : <MessageSquare size={22} />}
         </button>
         <PhotoButton
           compact

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, QrCode } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import { QRCodeSVG } from "qrcode.react";
@@ -241,7 +243,7 @@ function ExerciseScreen({
             className="flex min-h-12 min-w-12 items-center justify-center text-2xl"
             aria-label="Retour à l'accueil"
           >
-            ‹
+            <ChevronLeft size={28} />
           </Link>
           <p className="flex-1 truncate font-display text-lg font-bold">
             {ex.school}
@@ -384,13 +386,15 @@ function ExerciseScreen({
         <TeamCard team={team} />
 
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" onClick={() => setShowQr(true)}>
-            Inviter (QR code)
+          <Button variant="secondary" className="flex items-center justify-center gap-2" onClick={() => setShowQr(true)}>
+            <QrCode size={20} />
+            Inviter
           </Button>
           <Link
             to={`/rapport/${ex._id}`}
-            className="flex min-h-12 items-center justify-center rounded-xl bg-ink px-4 font-medium text-white"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-medium text-white"
           >
+            <FileText size={20} />
             Synthèse
           </Link>
         </div>

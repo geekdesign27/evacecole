@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { ChevronLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { SyncStatus } from "../lib/sync";
 
@@ -67,7 +68,7 @@ export function TopBar({
           className="-ml-2 flex min-h-12 min-w-12 items-center justify-center text-2xl"
           aria-label="Retour"
         >
-          ‹
+          <ChevronLeft size={28} />
         </Link>
       ) : (
         <Logo size={36} />

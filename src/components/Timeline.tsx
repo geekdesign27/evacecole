@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Check } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -61,7 +62,7 @@ export function Timeline({ ex, role, code, pending, onStamp, author }: Props) {
                         : "border-2 border-line"
                   }`}
                 >
-                  {done ? "✓" : ""}
+                  {done ? <Check size={20} strokeWidth={3} /> : null}
                 </span>
                 <button
                   type="button"

@@ -81,7 +81,7 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await expect(phone.getByRole("button", { name: "Début", exact: true })).toBeVisible();
 
   // The QR code shares the day code
-  await phone.getByRole("button", { name: "Inviter (QR code)" }).click();
+  await phone.getByRole("button", { name: "Inviter", exact: true }).click();
   await expect(phone.getByText("Aucun code du jour actif")).toHaveCount(0);
   await phone.getByRole("button", { name: "Fermer" }).click();
 

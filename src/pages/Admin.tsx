@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../../convex/_generated/api";
@@ -506,13 +507,13 @@ function ParticipantRow({ p, token, invite }: { p: Participant; token: string; i
         </Chip>
         <button
           type="button"
-          className="min-h-12 min-w-12 rounded-xl text-xl"
+          className="flex min-h-12 min-w-12 items-center justify-center rounded-xl"
           aria-label={`Supprimer ${name}`}
           onClick={() => {
             if (window.confirm(`Supprimer ${name} ?`)) void remove({ token, id: p._id });
           }}
         >
-          ×
+          <X size={20} />
         </button>
       </div>
     </li>
@@ -734,14 +735,14 @@ function Schools({ token }: { token: string }) {
               <span>{s.name}</span>
               <button
                 type="button"
-                className="min-h-12 min-w-12 text-xl"
+                className="flex min-h-12 min-w-12 items-center justify-center"
                 aria-label={`Retirer ${s.name}`}
                 onClick={() => {
                   if (window.confirm(`Retirer « ${s.name} » de la liste ?`))
                     void remove({ token, id: s._id });
                 }}
               >
-                ×
+                <X size={20} />
               </button>
             </li>
           ))}
