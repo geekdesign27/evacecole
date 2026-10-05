@@ -24,7 +24,7 @@ function Sheet({ role }: { role: Role }) {
             {role === "lead" ? "interpellateur" : "observateur·rice"}
           </h1>
           <p>
-            Compagnie des sapeurs-pompiers Moncor, mode papier (si le réseau ou
+            CP Moncor, mode papier (si le réseau ou
             le téléphone lâche)
           </p>
         </div>

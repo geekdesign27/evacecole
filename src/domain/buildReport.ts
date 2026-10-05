@@ -152,9 +152,9 @@ export function defaultIntro(
 ): string {
   const date = fmtDateLong(exDate);
   if (mode === "school" || schools.length <= 1) {
-    return `Le ${date}, la Compagnie des sapeurs-pompiers Moncor a conduit un exercice d'évacuation ${withLocativeArticle(schools[0] ?? "")}. Une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
+    return `Le ${date}, le CP Moncor a conduit un exercice d'évacuation ${withLocativeArticle(schools[0] ?? "")}. Une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
   }
-  return `Le ${date}, la Compagnie des sapeurs-pompiers Moncor a conduit des exercices d'évacuation dans les établissements suivants : ${joinFr(schools)}. Dans chaque établissement, une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
+  return `Le ${date}, le CP Moncor a conduit des exercices d'évacuation dans les établissements suivants : ${joinFr(schools)}. Dans chaque établissement, une personne a été interpellée sans préavis, des observateurs répartis dans les étages ont suivi le comportement des classes et du personnel.`;
 }
 
 /** « A, B et C » */

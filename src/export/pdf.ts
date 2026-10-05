@@ -180,7 +180,7 @@ export function buildPdfDefinition(model: ReportModel, assets: ExportAssets): TD
   return {
     pageSize: "A4",
     pageMargins: [45, 40, 45, 50],
-    info: { title: model.title, author: "Compagnie des sapeurs-pompiers Moncor" },
+    info: { title: model.title, author: "CP Moncor" },
     content,
     footer: (page, pages) => ({
       columns: [

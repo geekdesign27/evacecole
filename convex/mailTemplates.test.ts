@@ -13,6 +13,8 @@ describe("mail templates", () => {
     expect(m.html).toContain(`${appUrl}icon-192.png`);
     expect(m.text).toContain(`${appUrl}#/?k=moncor1752&n=Cyril%20Egger`);
     expect(m.html + m.text).not.toMatch(/[–—]/);
+    expect(m.html + m.text).toContain("CP Moncor");
+    expect(m.html + m.text + defaultReportMessageHtml("lundi")).not.toMatch(/Compagnie/i);
   });
 
   it("escapes everything: a name or a message cannot inject HTML", () => {

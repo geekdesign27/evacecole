@@ -109,7 +109,7 @@ function layout(opts: {
 <tr><td style="background:${BRAND};padding:18px 24px;">
 <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
 <td style="padding-right:14px;"><img src="${esc(logo)}" width="48" height="48" alt="CP Moncor" style="display:block;border-radius:24px;background:#ffffff;"></td>
-<td style="font-family:${FONT};color:#ffffff;font-size:15px;line-height:1.3;font-weight:700;">Compagnie des sapeurs-pompiers Moncor<br><span style="font-weight:400;opacity:.9;">Exercices d'évacuation des écoles</span></td>
+<td style="font-family:${FONT};color:#ffffff;font-size:15px;line-height:1.3;font-weight:700;">CP Moncor<br><span style="font-weight:400;opacity:.9;">Exercices d'évacuation des écoles</span></td>
 </tr></table>
 </td></tr>
 <tr><td style="padding:28px 24px 8px;">
@@ -117,7 +117,7 @@ function layout(opts: {
 ${opts.body}
 </td></tr>
 <tr><td style="padding:16px 24px 24px;border-top:1px solid #E7E9EE;font-family:${FONT};font-size:13px;line-height:1.5;color:${MUTED};">
-Compagnie des sapeurs-pompiers Moncor<br><a href="https://www.cpmoncor.ch" style="color:${MUTED};">www.cpmoncor.ch</a>
+CP Moncor<br><a href="https://www.cpmoncor.ch" style="color:${MUTED};">www.cpmoncor.ch</a>
 </td></tr>
 </table>
 </td></tr></table>
@@ -158,7 +158,7 @@ ${esc(typo("Si le bouton ne fonctionne pas, ouvrez"))} <a href="${esc(opts.appUr
     "",
     `Si le lien ne fonctionne pas, ouvrez ${opts.appUrl} et saisissez le code du jour : ${opts.code}`,
     "",
-    "Compagnie des sapeurs-pompiers Moncor, www.cpmoncor.ch",
+    "CP Moncor, www.cpmoncor.ch",
   ].join("\n");
   return {
     subject: `${title} : votre accès`,
@@ -172,7 +172,7 @@ ${esc(typo("Si le bouton ne fonctionne pas, ouvrez"))} <a href="${esc(opts.appUr
   };
 }
 
-/** End-of-day mail: the author's message and the report attached (PDF and Word). */
+/** End-of-day mail: the author's message and the PDF report attached. */
 export function reportMail(opts: {
   title: string;
   dateLong: string;
@@ -193,7 +193,7 @@ export function reportMail(opts: {
       ? `Pièces jointes : ${opts.attachments.join(", ")}`
       : "",
     "",
-    "Compagnie des sapeurs-pompiers Moncor, www.cpmoncor.ch",
+    "CP Moncor, www.cpmoncor.ch",
   ]
     .filter((l, i, a) => !(l === "" && a[i - 1] === ""))
     .join("\n");
@@ -212,9 +212,9 @@ export function reportMail(opts: {
 export function defaultReportMessageHtml(dateLong: string): string {
   return [
     "<p>Bonjour,</p>",
-    `<p>Merci pour votre engagement lors des exercices d'évacuation du ${esc(dateLong)}. Vous trouverez en pièce jointe le rapport complet, en PDF et en Word (modifiable).</p>`,
+    `<p>Merci pour votre engagement lors des exercices d'évacuation du ${esc(dateLong)}. Vous trouverez en pièce jointe le rapport complet, en PDF.</p>`,
     "<p>Chaque établissement y trouve le déroulement de son exercice, les points en ordre, les points à améliorer et nos recommandations. Nous restons volontiers à disposition pour en discuter.</p>",
     "<p>Avec nos meilleures salutations,</p>",
-    "<p>Compagnie des sapeurs-pompiers Moncor</p>",
+    "<p>CP Moncor</p>",
   ].join("");
 }

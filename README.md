@@ -1,6 +1,6 @@
 # Exercices d'évacuation des écoles : mode d'emploi terrain
 
-Compagnie des sapeurs-pompiers Moncor. Une page, à lire une fois avant l'exercice.
+CP Moncor. Une page, à lire une fois avant l'exercice.
 
 ## Avant (une seule fois par téléphone)
 

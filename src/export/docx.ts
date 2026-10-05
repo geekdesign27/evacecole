@@ -292,7 +292,7 @@ export async function renderDocx(
   children.push(heading("Conclusion", HeadingLevel.HEADING_2), ...richParagraphs(model.conclusion));
 
   const doc = new Document({
-    creator: "Compagnie des sapeurs-pompiers Moncor",
+    creator: "CP Moncor",
     title: model.title,
     styles: {
       default: {

@@ -23,7 +23,7 @@ export function TeamGate({ children }: { children: ReactNode }) {
           <h1 className="text-2xl font-bold leading-tight">
             Exercices d'évacuation
           </h1>
-          <p className="text-muted">Compagnie des sapeurs-pompiers Moncor</p>
+          <p className="text-muted">CP Moncor</p>
         </div>
       </div>
       <Card>

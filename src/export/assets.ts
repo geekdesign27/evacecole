@@ -38,4 +38,4 @@ export function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-export const FOOTER_TEXT = "Compagnie des sapeurs-pompiers Moncor, www.cpmoncor.ch";
+export const FOOTER_TEXT = "CP Moncor, www.cpmoncor.ch";

@@ -366,16 +366,7 @@ function Field({
   );
 }
 
-async function renderBoth(model: ReportModel) {
-  const assets = await loadAssets(model);
-  const [pdf, docx] = await Promise.all([
-    import("../export/pdf").then((m) => m.renderPdf(model, assets)),
-    import("../export/docx").then((m) => m.renderDocx(model, assets)),
-  ]);
-  return { pdf, docx };
-}
-
-/** End-of-day e-mail: message + report attached, sent from the admin's Gmail. */
+/** End-of-day e-mail: message + PDF report attached (the Word file stays with the author), sent from the admin's Gmail. */
 function SendReport({
   model,
   label,
@@ -428,12 +419,13 @@ function SendReport({
 
   async function send() {
     if (!recipients.length) return;
-    if (!window.confirm(`Envoyer le rapport (PDF et Word) à ${recipients.length} destinataire${recipients.length > 1 ? "s" : ""} ?`)) return;
+    if (!window.confirm(`Envoyer le rapport PDF à ${recipients.length} destinataire${recipients.length > 1 ? "s" : ""} ?`)) return;
     setBusy(true);
     setResult(null);
     setError(null);
     try {
-      const { pdf, docx } = await renderBoth(model);
+      const assets = await loadAssets(model);
+      const pdf = await (await import("../export/pdf")).renderPdf(model, assets);
       const upload = async (blob: Blob, filename: string, contentType: string) => {
         const url = await generateUploadUrl({ code });
         const res = await fetch(url, { method: "POST", headers: { "Content-Type": contentType }, body: blob });
@@ -441,10 +433,7 @@ function SendReport({
         const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
         return { storageId, filename, contentType };
       };
-      const files = await Promise.all([
-        upload(pdf, reportFileName(model.exDate, label, "pdf"), "application/pdf"),
-        upload(docx, reportFileName(model.exDate, label, "docx"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-      ]);
+      const files = [await upload(pdf, reportFileName(model.exDate, label, "pdf"), "application/pdf")];
       const r = await sendReport({
         token: adminToken,
         recipients,
@@ -473,7 +462,7 @@ function SendReport({
           <strong>Mode simulation :</strong> rien ne part réellement, les envois apparaissent dans le journal de Gestion.
         </p>
       ) : (
-        mode && <p className="mb-3 text-sm text-muted">Envoi depuis {mode.from}, avec le rapport en PDF et en Word.</p>
+        mode && <p className="mb-3 text-sm text-muted">Envoi depuis {mode.from}, avec le rapport en PDF. Le Word reste pour toi (bouton « Télécharger Word »).</p>
       )}
       <fieldset className="mb-3">
         <legend className="mb-1 font-medium">Destinataires</legend>
@@ -688,7 +677,7 @@ function Preview({ model }: { model: ReportModel }) {
       <h3 className="mt-4 text-lg font-bold text-brand">Conclusion</h3>
       <RichView value={model.conclusion} />
       <footer className="mt-6 border-t border-line pt-2 text-sm text-muted">
-        Compagnie des sapeurs-pompiers Moncor, www.cpmoncor.ch
+        CP Moncor, www.cpmoncor.ch
       </footer>
     </article>
   );

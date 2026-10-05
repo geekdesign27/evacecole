@@ -195,7 +195,7 @@ describe("buildReport", () => {
       "Rapport d'exercice d'évacuation : École de Platy",
     );
     expect(report.intro).toContain(
-      "Le lundi 5 octobre 2026, la Compagnie des sapeurs-pompiers Moncor",
+      "Le lundi 5 octobre 2026, le CP Moncor a conduit",
     );
     expect(report.intro).toContain("à l'École de Platy");
   });
@@ -275,6 +275,8 @@ describe("buildReport", () => {
     const all = JSON.stringify(report);
     expect(all).not.toMatch(NO_DASH);
     expect(all).not.toMatch(/[✓✔✗✘→←]/);
+    // The organisation is always « CP Moncor »
+    expect(all).not.toMatch(/Compagnie/i);
   });
 
   it("uses manual recommendations when edited", () => {

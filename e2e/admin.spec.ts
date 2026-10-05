@@ -116,7 +116,7 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await expect(admin.getByText("3 simulés")).toBeVisible({ timeout: 60_000 });
   await admin.goto("./#/admin");
   await expect(journal.getByText("direction@example.ch").first()).toBeVisible();
-  await expect(journal.locator("li", { hasText: "direction@example.ch" }).first()).toContainText("2 pièces jointes");
+  await expect(journal.locator("li", { hasText: "direction@example.ch" }).first()).toContainText("1 pièce jointe");
 
   // Admin device: delete button on the home cards
   await admin.goto("./#/");

@@ -36,6 +36,8 @@ Toute évolution de la grille touche `checklist.ts` + `buildReport` + leurs test
   avant `: ; ! ?`, écriture inclusive avec point médian (enseignant·es).
 - **Jamais de tiret cadratin ni demi-cadratin** dans l'UI, les textes du code ou les
   rapports : virgule, deux-points ou parenthèses à la place.
+- Nom de l'organisation : toujours **« CP Moncor »**, jamais « Compagnie des sapeurs-pompiers Moncor »
+  (textes de l'app, rapports, pieds de page, courriels, métadonnées).
 - Aucun texte « style IA » (« Il est important de noter », « En résumé », superlatifs).
   Ton cpmoncor.ch : direct, sobre, humain, sans emphase.
 - Le rapport n'affiche jamais de croix, flèches ou pictos : uniquement des phrases courtes.
