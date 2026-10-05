@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Ban, CalendarClock, Check, Copy, LogOut, QrCode, RotateCcw, Smartphone, X } from "lucide-react";
+import type React from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../../convex/_generated/api";
@@ -57,14 +58,16 @@ export function AdminPage() {
         right={
           <button
             type="button"
-            className="min-h-12 px-2 underline"
+            aria-label="Déconnexion"
+            title="Déconnexion"
+            className="flex min-h-12 min-w-12 items-center justify-center"
             onClick={() => {
               void logout({ token });
               removeKey(TOKEN_KEY);
               setToken("");
             }}
           >
-            Déconnexion
+            <LogOut size={24} />
           </button>
         }
       />
@@ -144,6 +147,19 @@ function Login({ onLogged }: { onLogged: (token: string) => void }) {
   );
 }
 
+/** Compact secondary button with an icon (admin lists). */
+function SmallBtn({ className = "", children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      {...props}
+      className={`flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border-2 border-line bg-white px-2 text-[15px] font-medium ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function periodText(from: string, to?: string) {
   return !to || to === from ? fmtDateLong(from) : `du ${fmtDateLong(from)} au ${fmtDateLong(to)}`;
 }
@@ -157,19 +173,19 @@ function CodeDates({ token, id, validDate, validUntil }: { token: string; id: Id
   const [error, setError] = useState<string | null>(null);
   if (!open) {
     return (
-      <Button variant="secondary" onClick={() => setOpen(true)}>
-        Dates / prolonger
-      </Button>
+      <SmallBtn aria-label="Dates / prolonger" onClick={() => setOpen(true)}>
+        <CalendarClock size={18} /> Dates
+      </SmallBtn>
     );
   }
   return (
-    <div className="flex basis-full flex-col gap-2 rounded-xl bg-bg p-3">
+    <div className="col-span-3 flex flex-col gap-2 rounded-xl bg-bg p-3">
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col text-sm font-medium">
+        <label className="flex min-w-0 flex-col text-sm font-medium">
           Valable du
           <input type="date" className="field" value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
-        <label className="flex flex-col text-sm font-medium">
+        <label className="flex min-w-0 flex-col text-sm font-medium">
           au
           <input type="date" className="field" min={from} value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
@@ -219,7 +235,7 @@ function Codes({ token }: { token: string }) {
       </p>
       <div className="flex flex-col gap-2">
         <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col text-sm font-medium">
+          <label className="flex min-w-0 flex-col text-sm font-medium">
             Valable du
             <input
               type="date"
@@ -231,7 +247,7 @@ function Codes({ token }: { token: string }) {
               }}
             />
           </label>
-          <label className="flex flex-col text-sm font-medium">
+          <label className="flex min-w-0 flex-col text-sm font-medium">
             au
             <input type="date" className="field" min={date} value={until} onChange={(e) => setUntil(e.target.value)} />
           </label>
@@ -248,10 +264,11 @@ function Codes({ token }: { token: string }) {
           aria-label="Mon code"
           autoCapitalize="none"
           autoComplete="off"
-          placeholder="Mon code (facultatif, ex. moncor5), sinon généré"
+          placeholder="Mon code (facultatif)"
           value={custom}
           onChange={(e) => setCustom(e.target.value)}
         />
+        <p className="-mt-1 text-sm text-muted">Laisse vide pour un code généré automatiquement.</p>
         <Button
           onClick={async () => {
             setError(null);
@@ -310,15 +327,15 @@ function Codes({ token }: { token: string }) {
                         : "À venir"}
                 </span>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                <SmallBtn
+                  aria-label={shown === c.code ? "Masquer le QR code" : "QR code"}
                   onClick={() => setShown(shown === c.code ? null : c.code)}
                 >
-                  {shown === c.code ? "Masquer le QR" : "QR code"}
-                </Button>
-                <Button
-                  variant="secondary"
+                  <QrCode size={18} /> QR
+                </SmallBtn>
+                <SmallBtn
+                  aria-label="Copier le lien"
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(inviteLink(c.code));
@@ -328,22 +345,21 @@ function Codes({ token }: { token: string }) {
                     }
                   }}
                 >
-                  {copied === c.code ? "Lien copié" : "Copier le lien"}
-                </Button>
+                  {copied === c.code ? <Check size={18} /> : <Copy size={18} />} Lien
+                </SmallBtn>
                 {c.active && deviceCode !== c.code && (
-                  <Button variant="secondary" onClick={() => setCode(c.code)}>
-                    Utiliser sur ce téléphone
-                  </Button>
+                  <SmallBtn aria-label="Utiliser sur ce téléphone" onClick={() => setCode(c.code)}>
+                    <Smartphone size={18} /> Ce téléphone
+                  </SmallBtn>
                 )}
                 <CodeDates token={token} id={c._id} validDate={c.validDate} validUntil={c.validUntil ?? c.validDate} />
-                <Button
-                  variant={c.revoked ? "secondary" : "primary"}
-                  onClick={() =>
-                    void revoke({ token, id: c._id, revoked: !c.revoked })
-                  }
+                <SmallBtn
+                  aria-label={c.revoked ? "Réactiver" : "Révoquer"}
+                  className={c.revoked ? "" : "border-brand text-brand"}
+                  onClick={() => void revoke({ token, id: c._id, revoked: !c.revoked })}
                 >
-                  {c.revoked ? "Réactiver" : "Révoquer"}
-                </Button>
+                  {c.revoked ? <RotateCcw size={18} /> : <Ban size={18} />} {c.revoked ? "Réactiver" : "Révoquer"}
+                </SmallBtn>
               </div>
               {shown === c.code && (
                 <div className="mt-3 flex justify-center">

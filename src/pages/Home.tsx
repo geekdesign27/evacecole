@@ -171,7 +171,7 @@ export function Home() {
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold">Aujourd'hui</h2>
-            {todays.length > 0 && (
+            {todays.length > 0 && token && (
               <Link
                 to={`/rapport/jour/${today}`}
                 className="flex min-h-12 items-center font-medium text-brand underline"
@@ -195,12 +195,11 @@ export function Home() {
               <div key={date} className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold capitalize">{fmtDateLong(date)}</h3>
-                  <Link
-                    to={`/rapport/jour/${date}`}
-                    className="flex min-h-12 items-center text-brand underline"
-                  >
-                    Rapport
-                  </Link>
+                  {token && (
+                    <Link to={`/rapport/jour/${date}`} className="flex min-h-12 items-center text-brand underline">
+                      Rapport
+                    </Link>
+                  )}
                 </div>
                 {exs.map((ex) => (
                   <ExerciseCard key={ex._id} ex={ex} adminToken={token} />

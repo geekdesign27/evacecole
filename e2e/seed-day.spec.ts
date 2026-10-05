@@ -208,11 +208,11 @@ test("seed a fake morning of 4 schools and export the day report", async ({ brow
   // 3. Day report with all four schools, both exports
   const writer = await phone(browser);
   await writer.goto(`./#/?k=${CODE}`);
+  await loginAdmin(writer);
+  await writer.reload();
   await writer.getByRole("link", { name: "Rapport de la journée" }).click();
   const preview = writer.getByRole("article", { name: "Aperçu du rapport" });
   for (const s of SCHOOLS) await expect(preview).toContainText(s.name);
-  await loginAdmin(writer);
-  await writer.reload();
   await writer.getByLabel("Rédigé par").fill("Plt Pierre-Alain Schütz");
   await writer.getByRole("button", { name: /Insérer les suggestions/ }).click();
   for (const [button, ext] of [["Télécharger PDF", "pdf"], ["Télécharger Word", "docx"]] as const) {

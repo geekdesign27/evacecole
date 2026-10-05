@@ -78,3 +78,15 @@ h1, h2, h3, .font-display {
 .rich-content em { font-style: italic; }
 .rich-content h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.1em; margin: 0.4em 0 0.3em; }
 .rich-content u { text-decoration: underline; }
+
+/* iOS Safari gives date inputs an intrinsic minimum width: let them fit their column. */
+input[type="date"].field {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type="date"].field::-webkit-date-and-time-value {
+  text-align: left;
+}

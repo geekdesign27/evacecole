@@ -14,6 +14,7 @@ import { useObservationDraft, useStamps, type Draft } from "../lib/sync";
 import { useTeam } from "../lib/team";
 import { Checklist } from "../components/Checklist";
 import { AppMenu } from "../components/AppMenu";
+import { useAdminToken } from "../lib/admin";
 import { PhotoButton, Thumbs } from "../components/Photos";
 import { Stopwatch } from "../components/Stopwatch";
 import { Timeline } from "../components/Timeline";
@@ -226,6 +227,7 @@ function ExerciseScreen({
   const update = useMutation(api.exercises.update);
   const { tap, pending } = useStamps(ex._id, code);
   const [showQr, setShowQr] = useState(false);
+  const adminToken = useAdminToken();
   const author = attribution(draft).slice(1, -1);
 
   // Register the lead's name on the exercise once.
@@ -427,18 +429,21 @@ function ExerciseScreen({
 
         <TeamCard team={team} />
 
-        <div className="grid grid-cols-2 gap-2">
+        {/* Synthesis is for the admin only; anyone can invite a newcomer. */}
+        <div className={`grid gap-2 ${adminToken ? "grid-cols-2" : "grid-cols-1"}`}>
           <Button variant="secondary" className="flex items-center justify-center gap-2" onClick={() => setShowQr(true)}>
             <QrCode size={20} />
             Inviter
           </Button>
-          <Link
-            to={`/rapport/${ex._id}`}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-medium text-white"
-          >
-            <FileText size={20} />
-            Synthèse
-          </Link>
+          {adminToken && (
+            <Link
+              to={`/rapport/${ex._id}`}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-ink px-4 font-medium text-white"
+            >
+              <FileText size={20} />
+              Synthèse
+            </Link>
+          )}
         </div>
       </main>
 
@@ -574,9 +579,11 @@ function TeamCard({ team }: { team: Doc<"observations">[] | undefined }) {
 function QrModal({ exId, code, onClose }: { exId: string; code: string; onClose: () => void }) {
   // Never share the permanent code: the QR carries today's day code from the admin page.
   const shared = useQuery(api.team.shareCode, { code });
+  // The invitation opens the home page: the newcomer picks (or starts) the exercise there.
+  void exId;
   const link = shared
-    ? `${window.location.origin}${window.location.pathname}#/x/${exId}?k=${encodeURIComponent(shared)}`
-    : `${window.location.origin}${window.location.pathname}#/x/${exId}`;
+    ? `${window.location.origin}${window.location.pathname}#/?k=${encodeURIComponent(shared)}`
+    : `${window.location.origin}${window.location.pathname}#/`;
   const [copied, setCopied] = useState(false);
   return (
     <div

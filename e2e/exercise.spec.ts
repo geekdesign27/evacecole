@@ -123,13 +123,16 @@ test("full exercise with three phones, offline safety and both exports", async (
   await obs1.getByRole("button", { name: "Ma zone est évacuée" }).click();
 
   // Synthesis
-  // A team member sees the preview but cannot edit the report texts
-  await lead.getByRole("link", { name: "Synthèse" }).click();
-  await expect(lead.getByRole("article", { name: "Aperçu du rapport" })).toBeVisible();
-  await expect(lead.getByRole("heading", { name: "Textes du rapport" })).toHaveCount(0);
-  // The admin can
+  // A team member has no access to the synthesis, the invitation stays available
+  await expect(lead.getByRole("link", { name: "Synthèse" })).toHaveCount(0);
+  await expect(lead.getByRole("button", { name: "Inviter", exact: true })).toBeVisible();
+  const url = lead.url();
+  await lead.goto(url.replace("#/x/", "#/rapport/"));
+  await expect(lead.getByText("Réservé à l'administrateur")).toBeVisible();
+  // The admin has it
   await loginAdmin(lead);
-  await lead.reload();
+  await lead.goto(url);
+  await lead.getByRole("link", { name: "Synthèse" }).click();
   await expect(lead.getByRole("heading", { name: "Textes du rapport" })).toBeVisible();
   const preview = lead.getByRole("article", { name: "Aperçu du rapport" });
   await expect(preview).toContainText(`Rapport d'exercice d'évacuation : ${school}`);

@@ -84,58 +84,54 @@ function ItemRow({
 
   return (
     <li className="border-b border-line py-3 last:border-0">
-      <p id={`lbl-${item.id}`} className="mb-2 font-medium leading-snug">
-        {item.label}
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <div
-          role="radiogroup"
-          aria-labelledby={`lbl-${item.id}`}
-          className="flex min-w-60 flex-1 gap-1.5"
-        >
-          {options.map((o) => {
-            const active = answer.v === o.v;
-            return (
-              <button
-                key={o.v}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                // Tapping the selected value again clears it (undo a wrong tap).
-                onClick={() => setAnswer({ v: active ? undefined : o.v })}
-                className={`min-h-12 flex-1 rounded-xl border-2 px-1 font-bold ${
-                  active ? o.on : "border-line bg-white text-ink"
-                }`}
-              >
-                {o.v === "partial" && item.partialLabel
-                  ? item.partialLabel
-                  : o.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* Label with comment and photo on the same line, answers below on one full-width row. */}
+      <div className="mb-2 flex items-start gap-2">
+        <p id={`lbl-${item.id}`} className="flex-1 pt-2 font-medium leading-snug">
+          {item.label}
+        </p>
         <button
           type="button"
           onClick={() => setShowComment((s) => !s)}
           aria-expanded={showComment}
           aria-label="Commentaire"
-          className={`flex min-h-12 min-w-12 items-center justify-center rounded-xl border-2 ${answer.c ? "border-ink bg-bg" : "border-line bg-white"}`}
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 ${answer.c ? "border-ink bg-bg" : "border-line bg-white"}`}
         >
           {answer.c ? <MessageSquareText size={22} /> : <MessageSquare size={22} />}
         </button>
-        <PhotoButton
-          compact
-          code={code}
-          onAdded={(storageId) =>
-            setDraft((d) => ({
-              ...d,
-              photos: [
-                ...d.photos,
-                { storageId: storageId as Id<"_storage">, itemId: item.id },
-              ],
-            }))
-          }
-        />
+        <div className="flex shrink-0 flex-wrap justify-end">
+          <PhotoButton
+            compact
+            code={code}
+            onAdded={(storageId) =>
+              setDraft((d) => ({
+                ...d,
+                photos: [...d.photos, { storageId: storageId as Id<"_storage">, itemId: item.id }],
+              }))
+            }
+          />
+        </div>
+      </div>
+      <div role="radiogroup" aria-labelledby={`lbl-${item.id}`} className="flex gap-1.5">
+        {options.map((o) => {
+          const active = answer.v === o.v;
+          return (
+            <button
+              key={o.v}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              // Tapping the selected value again clears it (undo a wrong tap).
+              onClick={() => setAnswer({ v: active ? undefined : o.v })}
+              className={`min-h-12 min-w-0 flex-1 rounded-xl border-2 px-0.5 font-bold ${
+                active ? o.on : "border-line bg-white text-ink"
+              }`}
+            >
+              {o.v === "partial" && item.partialLabel ? item.partialLabel : o.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 empty:mt-0">
         <Thumbs
           photos={photos}
           urls={photoUrls}

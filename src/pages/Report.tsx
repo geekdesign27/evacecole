@@ -19,18 +19,53 @@ import { downloadBlob, loadAssets } from "../export/assets";
 import { defaultReportMessageHtml } from "../../convex/mailTemplates";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 import { errorMessage } from "../lib/errors";
-import { useAdminToken } from "../lib/admin";
 import { fixLegacyFields } from "../domain/legacy";
 
 
-/** Report of one school. */
+/** Shown when someone who is not the admin opens a report link. */
+function AdminOnly() {
+  return (
+    <>
+      <TopBar title="Synthèse" back="/" />
+      <main className="mx-auto max-w-xl p-4">
+        <Card>
+          <h2 className="mb-1 text-lg font-bold">Réservé à l'administrateur</h2>
+          <p className="text-sm text-muted">
+            La synthèse et les rapports sont établis par le chef d'exercice.{" "}
+            <Link to="/admin" className="underline">
+              Connexion administrateur
+            </Link>
+          </p>
+        </Card>
+      </main>
+    </>
+  );
+}
+
+/** Report of one school (admin only). */
 export function SchoolReportPage() {
+  const stored = readJSON<string>("evac:admin", "");
+  const ok = useQuery(api.admin.me, stored ? { token: stored } : "skip");
+  if (stored && ok === undefined) return <Spinner />;
+  if (!ok) return <AdminOnly />;
+  return <SchoolReport adminToken={stored} />;
+}
+
+/** Report of a whole day (admin only). */
+export function DayReportPage() {
+  const stored = readJSON<string>("evac:admin", "");
+  const ok = useQuery(api.admin.me, stored ? { token: stored } : "skip");
+  if (stored && ok === undefined) return <Spinner />;
+  if (!ok) return <AdminOnly />;
+  return <DayReport adminToken={stored} />;
+}
+
+function SchoolReport({ adminToken }: { adminToken: string }) {
   const { id } = useParams<{ id: string }>();
   const { code } = useTeam();
   const exId = id as Id<"exercises">;
   const ex = useQuery(api.exercises.get, { code, id: exId });
   const obs = useQuery(api.observations.byExercise, { code, exerciseId: exId });
-  const adminToken = useAdminToken();
   const updateReport = useMutation(api.admin.updateReport);
 
   if (ex === undefined || obs === undefined) return <Spinner />;
@@ -52,12 +87,11 @@ export function SchoolReportPage() {
 }
 
 /** Report of a whole day: several schools in one document. */
-export function DayReportPage() {
+function DayReport({ adminToken }: { adminToken: string }) {
   const { date = "" } = useParams<{ date: string }>();
   const { code } = useTeam();
   const list = useQuery(api.exercises.listRecent, { code });
   const stored = useQuery(api.exercises.dayReport, { code, exDate: date });
-  const adminToken = useAdminToken();
   const updateDay = useMutation(api.admin.updateDayReport);
   const dayExercises = useMemo(
     () => (list ?? []).filter((e) => e.exDate === date && !e.archived),

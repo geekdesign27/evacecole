@@ -142,6 +142,7 @@ test("demo report", async ({ browser }) => {
   for (const p of [lead, ...obs]) await expect(p.getByRole("status")).toHaveText("Synchronisé", { timeout: 10_000 });
 
   await loginAdmin(lead);
+  await lead.reload();
   await lead.getByRole("link", { name: "Synthèse" }).click();
   await lead.getByLabel("Rédigé par").fill("Plt Pierre-Alain Schütz");
   // Formatted recommendations: a bold lead-in, then a bullet list, then the suggestions

@@ -77,7 +77,7 @@ export function PhotoButton({
     <>
       <Button
         variant="secondary"
-        className={compact ? "flex min-w-12 items-center justify-center px-3" : ""}
+        className={compact ? "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl !px-0 !py-0" : ""}
         onClick={open}
         disabled={busy}
         aria-label={compact ? "Ajouter une photo" : undefined}
@@ -85,7 +85,7 @@ export function PhotoButton({
         {busy ? (
           "Envoi…"
         ) : compact ? (
-          <Camera size={22} />
+          <Camera size={22} className="shrink-0" />
         ) : (
           <span className="flex items-center gap-2">
             <Camera size={20} />
