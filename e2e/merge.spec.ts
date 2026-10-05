@@ -124,8 +124,8 @@ test("merge two exercises created for the same school", async ({ browser }) => {
   await admin.goto(`./#/rapport/${a}`);
   const report = admin.getByRole("article", { name: "Aperçu du rapport" });
   await expect(report).toContainText("Rez (Cyril Egger), 1er étage (Joël Pochon), 2e étage (Jean-Pierre Nussbaumer)");
-  await expect(report).toContainText("Quelques portes sont restées ouvertes (1er étage). En ordre : Rez.");
-  await expect(report).toContainText("Plusieurs portes calées constatées.");
+  await expect(report).toContainText("quelques portes sont restées ouvertes (1er étage)");
+  await expect(report).toContainText("plusieurs portes calées constatées (2e étage)");
   await expect(report).toContainText("Numéro des pompiers (118) inconnu.");
   await expect(report).toContainText("Deux classes ont laissé la porte ouverte. (Joël Pochon, 1er étage)");
   await expect(report.getByRole("figure")).toHaveCount(1);

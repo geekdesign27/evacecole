@@ -87,12 +87,44 @@ export interface ReportPhoto {
  * One compiled topic of the report (« Personne interpellée », « Comportement dans les étages »,
  * « Technique »): answers of the whole team merged point by point.
  */
-export interface ReportGroup {
+export type Verdict = "ok" | "partial" | "no";
+
+/** Interpellated person: the procedure, step by step, in order. */
+export interface StepRow {
+  n: number;
+  label: string;
+  verdict: Verdict;
+  /** What was observed when it was not in order. */
+  finding?: string;
+  comments: string[];
+}
+
+export interface StepSection {
   title: string;
-  /** Points to improve (with the zones concerned), and points carrying a comment. */
-  issues: ReportLine[];
-  /** Compliant points without comment, printed as one run-in paragraph. */
-  ok: string[];
+  rows: StepRow[];
+}
+
+/** Floors: one row per point, one cell per zone (Oui / Partiel / Non). */
+export interface FloorRow {
+  section: "Comportement dans les étages" | "Technique";
+  label: string;
+  cells: Record<string, Verdict | undefined>;
+}
+
+/** A point to improve or worth a precision, explained in plain words. */
+export interface FloorNote {
+  label: string;
+  /** « plusieurs portes sont restées ouvertes (Rez), quelques portes… (2e étage) » */
+  finding?: string;
+  comments: string[];
+}
+
+export interface FloorTable {
+  zones: string[];
+  rows: FloorRow[];
+  toImprove: FloorNote[];
+  /** Points in order but commented by an observer. */
+  precisions: FloorNote[];
 }
 
 export interface SchoolReport {
@@ -104,7 +136,8 @@ export interface SchoolReport {
   summary: string;
   /** « Rez (Cyril Egger), 1er étage (Jean-Pierre Nussbaumer) » */
   zonesObserved: string;
-  groups: ReportGroup[];
+  steps: StepSection[];
+  floors: FloorTable | null;
   remarks: string[];
   photos: ReportPhoto[];
   okCount: number;
@@ -164,8 +197,9 @@ export function joinFr(list: string[]): string {
 }
 
 /** « (Prénom Nom, zone) » */
-export function attribution(o: { observer: string; zone?: string }): string {
+export function attribution(o: { observer: string; zone?: string; role?: Role }): string {
   const who = o.observer.trim() || "Observateur·rice";
+  if (o.role === "lead") return `(${who}, interpellateur)`;
   return o.zone?.trim() ? `(${who}, ${o.zone.trim()})` : `(${who})`;
 }
 
@@ -371,7 +405,7 @@ const GROUPS: { title: string; sections: string[]; who: string }[] = [
 /** Default « Critères d'évaluation » text, generated from the checklist so both always match. */
 export function defaultCriteria(): string {
   const intro =
-    "Chaque point est évalué sur place et noté Oui (conforme), Partiel ou Non, ou Sans objet lorsqu'il ne s'applique pas. Le rapport reprend les points évalués : ceux à améliorer avec les zones concernées, puis ceux en ordre.";
+    "Les étapes de la personne interpellée sont appréciées En ordre, Hésitant ou Pas fait. Dans les étages, chaque observateur note pour sa zone Oui, Partiel ou Non, ou Sans objet lorsqu'un point ne s'applique pas (zone vide, par exemple). Le rapport présente un tableau par zone, puis explique chaque point à améliorer.";
   const parts = [`<p>${escapeHtml(intro)}</p>`];
   for (const g of GROUPS) {
     const items = SECTIONS.filter((x) => g.sections.includes(x.id)).flatMap((x) => x.items);
@@ -382,32 +416,92 @@ export function defaultCriteria(): string {
   return parts.join("");
 }
 
+const WORST: Verdict[] = ["no", "partial", "ok"];
+
+function lowerFirst(t: string): string {
+  return t ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+}
+
+/** Floor point in words: « plusieurs portes sont restées ouvertes (Rez), quelques portes… (2e étage) ». */
+function floorFinding(item: ChecklistItem, byZone: [string, Verdict][]): string | undefined {
+  const parts: string[] = [];
+  for (const v of ["no", "partial"] as const) {
+    const zones = byZone.filter(([, x]) => x === v).map(([z]) => z);
+    if (zones.length) parts.push(`${lowerFirst(item[v].replace(/\.\s*$/, ""))} (${zones.join(", ")})`);
+  }
+  return parts.length ? `${parts.join(", ")}.` : undefined;
+}
+
+function buildSteps(leads: ObservationInput[]): StepSection[] {
+  const sections: StepSection[] = [];
+  let n = 0;
+  for (const section of SECTIONS.filter((x) => x.role === "lead")) {
+    const rows: StepRow[] = [];
+    for (const item of section.items) {
+      n++;
+      const answered = leads.filter((o) => o.answers[item.id]?.v && o.answers[item.id]!.v !== "na");
+      if (!answered.length) continue; // not evaluated or N/A: left out
+      const verdict = WORST.find((w) => answered.some((o) => o.answers[item.id]!.v === w))!;
+      const comments = answered
+        .filter((o) => o.answers[item.id]!.c?.trim())
+        .map((o) => `« ${o.answers[item.id]!.c!.trim()} » ${attribution(o)}`);
+      rows.push({ n, label: item.label, verdict, finding: verdict === "ok" ? undefined : item[verdict], comments });
+    }
+    if (rows.length) sections.push({ title: section.title, rows });
+  }
+  return sections;
+}
+
+function buildFloors(observers: ObservationInput[]): FloorTable | null {
+  const zoneOf = (o: ObservationInput) => o.zone?.trim() || observerName(o);
+  const zones = uniq(observers.map(zoneOf)).sort((a, b) => zoneOrder(a) - zoneOrder(b) || a.localeCompare(b, "fr"));
+  if (!zones.length) return null;
+  const rows: FloorRow[] = [];
+  const toImprove: FloorNote[] = [];
+  const precisions: FloorNote[] = [];
+  for (const section of SECTIONS.filter((x) => x.role === "obs")) {
+    for (const item of section.items) {
+      const cells: Record<string, Verdict | undefined> = {};
+      for (const z of zones) {
+        const vs = observers
+          .filter((o) => zoneOf(o) === z)
+          .map((o) => o.answers[item.id]?.v)
+          .filter((v): v is Verdict => !!v && v !== "na");
+        cells[z] = WORST.find((w) => vs.includes(w)); // worst answer when two observers share a zone
+      }
+      const answered = Object.entries(cells).filter((e): e is [string, Verdict] => !!e[1]);
+      if (!answered.length) continue; // nobody evaluated it (or only N/A): no row
+      rows.push({ section: section.id === "technique" ? "Technique" : "Comportement dans les étages", label: item.label, cells });
+      const comments = observers
+        .filter((o) => o.answers[item.id]?.c?.trim() && o.answers[item.id]?.v !== "na")
+        .map((o) => `« ${o.answers[item.id]!.c!.trim()} » ${attribution(o)}`);
+      const finding = floorFinding(item, answered);
+      if (finding) toImprove.push({ label: item.label, finding, comments });
+      else if (comments.length) precisions.push({ label: item.label, comments });
+    }
+  }
+  return rows.length ? { zones, rows, toImprove, precisions } : null;
+}
+
 export function buildSchoolReport(ex: ExerciseInput, allObs: ObservationInput[]): SchoolReport {
   const obs = allObs.filter((o) => o.exerciseId === ex._id);
   let okCount = 0;
   let issueCount = 0;
   const missing: SchoolReport["missing"] = [];
   const recoKeys = new Set<RecoKey>();
-  const groups: ReportGroup[] = [];
 
-  for (const g of GROUPS) {
-    const group: ReportGroup = { title: g.title, issues: [], ok: [] };
-    for (const section of SECTIONS.filter((x) => g.sections.includes(x.id))) {
-      const roleObs = obs.filter((o) => o.role === section.role);
-      for (const item of section.items) {
-        const syn = synthesizeItem(item, roleObs);
-        if (syn.status === "ok") okCount++;
-        if (syn.status === "issue") {
-          issueCount++;
-          if (item.reco) recoKeys.add(item.reco);
-        }
-        if (syn.status === "missing") missing.push({ itemId: item.id, label: item.label, role: section.role });
-        if (!syn.line) continue;
-        if (syn.status === "ok" && syn.line.comments.length === 0) group.ok.push(syn.line.text);
-        else if (syn.status !== "na" || syn.line.comments.length) group.issues.push(syn.line);
+  // Counts, missing points and suggestions use the whole team's answers per point.
+  for (const section of SECTIONS) {
+    const roleObs = obs.filter((o) => o.role === section.role);
+    for (const item of section.items) {
+      const syn = synthesizeItem(item, roleObs);
+      if (syn.status === "ok") okCount++;
+      if (syn.status === "issue") {
+        issueCount++;
+        if (item.reco) recoKeys.add(item.reco);
       }
+      if (syn.status === "missing") missing.push({ itemId: item.id, label: item.label, role: section.role });
     }
-    if (group.issues.length || group.ok.length) groups.push(group);
   }
 
   const remarks = obs
@@ -422,7 +516,8 @@ export function buildSchoolReport(ex: ExerciseInput, allObs: ObservationInput[])
     timingNotes: buildTimingNotes(ex),
     summary: buildSummary(ex, okCount, issueCount),
     zonesObserved: buildZonesObserved(obs),
-    groups,
+    steps: buildSteps(obs.filter((o) => o.role === "lead")),
+    floors: buildFloors(obs.filter((o) => o.role === "obs")),
     remarks,
     photos: buildPhotos(obs),
     okCount,

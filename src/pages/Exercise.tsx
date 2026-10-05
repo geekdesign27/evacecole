@@ -419,6 +419,7 @@ function ExerciseScreen({
                 setDraft((d) => ({
                   ...d,
                   photos: d.photos.filter((p) => p.storageId !== id),
+              removedPhotos: [...(d.removedPhotos ?? []), id as Id<"_storage">],
                 }))
               }
             />

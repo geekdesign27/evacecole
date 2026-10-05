@@ -1,6 +1,6 @@
-import type { Content, TDocumentDefinitions } from "pdfmake/interfaces";
-import type { ReportGroup, ReportLine, ReportModel, ReportPhoto, SchoolReport } from "../domain/buildReport";
-import { factRows } from "./layout";
+import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces";
+import type { FloorNote, FloorTable, ReportModel, ReportPhoto, SchoolReport, StepSection, Verdict } from "../domain/buildReport";
+import { CELL_WORD, factRows, FLOOR_LEGEND, STEP_WORD, VERDICT_COLOR } from "./layout";
 import { typo } from "../lib/typo";
 import { mapRuns, parseRich, type RichRun } from "../domain/rich";
 import { FOOTER_TEXT, type ExportAssets } from "./assets";
@@ -113,25 +113,96 @@ function factsTable(facts: SchoolReport["facts"]): Content {
   } as Content;
 }
 
-function lineContent(line: ReportLine): Content[] {
+
+const tableLayout = {
+  hLineColor: () => LINE,
+  vLineColor: () => LINE,
+  hLineWidth: () => 0.6,
+  vLineWidth: () => 0.6,
+  paddingTop: () => 2,
+  paddingBottom: () => 2,
+  paddingLeft: () => 4,
+  paddingRight: () => 4,
+};
+
+const verdictText = (v: Verdict, word: string): Content => ({ text: word, bold: true, color: VERDICT_COLOR[v] });
+
+function explanation(finding: string | undefined, comments: string[]): Content {
+  const stack: Content[] = [];
+  if (finding) stack.push({ text: [{ text: "Constat : ", bold: true }, t(finding)], fontSize: 9 });
+  for (const c of comments) stack.push({ text: [{ text: "Pourquoi : ", bold: true }, t(c)], fontSize: 9, italics: true, color: MUTED });
+  return { stack };
+}
+
+/** Interpellated person: numbered steps with En ordre / Hésitant / Pas fait, explained when not in order. */
+function stepsContent(sections: StepSection[]): Content[] {
+  if (!sections.length) return [];
+  const body: TableCell[][] = [
+    [
+      { text: "N°", bold: true, fontSize: 9, color: MUTED },
+      { text: "Étape de la procédure", bold: true, fontSize: 9, color: MUTED },
+      { text: "Appréciation", bold: true, fontSize: 9, color: MUTED },
+    ],
+  ];
+  for (const sec of sections) {
+    body.push([{ text: t(sec.title), bold: true, colSpan: 3, fillColor: "#F4F5F7", fontSize: 9.5 }, {}, {}]);
+    for (const r of sec.rows) {
+      body.push([{ text: String(r.n), color: MUTED }, t(r.label), verdictText(r.verdict, STEP_WORD[r.verdict])]);
+      if (r.finding || r.comments.length) body.push([{ text: "" }, { ...(explanation(r.finding, r.comments) as object), colSpan: 2 } as TableCell, {}]);
+    }
+  }
   return [
-    { text: t(line.text), margin: [0, 0, 0, 1] },
-    ...line.comments.map((c) => ({ text: t(c), italics: true, fontSize: 9, color: MUTED, margin: [10, 0, 0, 1] }) as Content),
+    { text: "Personne interpellée", style: "h3" },
+    { table: { headerRows: 1, widths: [16, "*", 62], body, dontBreakRows: true }, layout: tableLayout, fontSize: 9.5 },
   ];
 }
 
-function groupContent(g: ReportGroup): Content {
-  const parts: Content[] = [{ text: t(g.title), style: "h3" }];
-  parts.push(...g.issues.flatMap(lineContent));
-  if (g.ok.length) {
-    parts.push({
-      text: [{ text: "En ordre : ", bold: true }, t(g.ok.join(" "))].map((x) => (typeof x === "string" ? x : { ...x, text: t(x.text) })),
-      fontSize: 9.5,
-      color: MUTED,
-      margin: [0, g.issues.length ? 2 : 0, 0, 0],
-    });
+/** Floors: points × zones table (Oui / Partiel / Non), then the points to improve in plain words. */
+function floorsContent(f: FloorTable | null): Content[] {
+  if (!f) return [];
+  const zoneW = Math.max(34, Math.min(60, Math.floor(300 / f.zones.length)));
+  const head: TableCell[] = [
+    { text: "Point contrôlé", bold: true, fontSize: 8.5, color: MUTED },
+    ...f.zones.map((z) => ({ text: t(z), bold: true, fontSize: 8.5, color: MUTED, alignment: "center" }) as TableCell),
+  ];
+  const body: TableCell[][] = [head];
+  let section = "";
+  for (const r of f.rows) {
+    if (r.section !== section) {
+      section = r.section;
+      body.push([{ text: section, bold: true, colSpan: f.zones.length + 1, fillColor: "#F4F5F7", fontSize: 9 }, ...f.zones.map(() => ({}))]);
+    }
+    body.push([
+      { text: t(r.label), fontSize: 9 },
+      ...f.zones.map((z) => {
+        const v = r.cells[z];
+        return (v ? { ...(verdictText(v, CELL_WORD[v]) as object), alignment: "center", fontSize: 9 } : { text: "" }) as TableCell;
+      }),
+    ]);
   }
-  return { stack: parts, unbreakable: g.issues.length < 12 };
+  const out: Content[] = [
+    { text: "Dans les étages", style: "h3" },
+    { table: { headerRows: 1, widths: ["*", ...f.zones.map(() => zoneW)], body, dontBreakRows: true }, layout: tableLayout },
+    { text: FLOOR_LEGEND, fontSize: 8, color: MUTED, margin: [0, 2, 0, 0] },
+  ];
+  const notes = (title: string, list: FloorNote[]) =>
+    list.length
+      ? [
+          { text: title, bold: true, fontSize: 10, margin: [0, 6, 0, 2] } as Content,
+          {
+            ul: list.map((n) => ({
+              stack: [
+                { text: [{ text: `${t(n.label)}${n.finding ? " : " : ""}`, bold: true }, n.finding ? t(n.finding) : ""] },
+                ...n.comments.map((c) => ({ text: t(c), italics: true, color: MUTED, fontSize: 9 }) as Content),
+              ],
+              margin: [0, 0, 0, 2],
+            })),
+            fontSize: 9.5,
+          } as Content,
+        ]
+      : [];
+  out.push(...notes("À améliorer", f.toImprove), ...notes("Précisions des observateurs", f.precisions));
+  return out;
 }
 
 function schoolBlock(s: SchoolReport, model: ReportModel, assets: ExportAssets): Content[] {
@@ -149,7 +220,7 @@ function schoolBlock(s: SchoolReport, model: ReportModel, assets: ExportAssets):
     ],
     unbreakable: true,
   });
-  for (const g of s.groups) out.push(groupContent(g));
+  out.push(...stepsContent(s.steps), ...floorsContent(s.floors));
   if (s.remarks.length) {
     out.push({ stack: [{ text: "Remarques", style: "h3" }, ...s.remarks.map((r) => ({ text: t(r), margin: [0, 0, 0, 1] }) as Content)], unbreakable: s.remarks.length < 8 });
   }

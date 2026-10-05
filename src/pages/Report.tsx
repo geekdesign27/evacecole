@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -7,8 +7,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel";
 import {
   buildReport,
   type ReportFields,
-  type ReportModel,
-} from "../domain/buildReport";
+  type ReportModel, type FloorNote, type FloorTable, type StepSection } from "../domain/buildReport";
 import { fmtDateLong, reportFileName } from "../domain/format";
 import { device, readJSON } from "../lib/storage";
 import { typo } from "../lib/typo";
@@ -16,6 +15,7 @@ import { escapeHtml, mapRuns, parseRich, toEditorHtml, type RichRun } from "../d
 import { RichEditor } from "../components/RichEditor";
 import { useTeam } from "../lib/team";
 import { downloadBlob, loadAssets } from "../export/assets";
+import { CELL_WORD, FLOOR_LEGEND, STEP_WORD } from "../export/layout";
 import { defaultReportMessageHtml } from "../../convex/mailTemplates";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 import { errorMessage } from "../lib/errors";
@@ -704,26 +704,8 @@ function Preview({ model }: { model: ReportModel }) {
               <strong>Zones observées :</strong> {t(s.zonesObserved)}
             </p>
           )}
-          {s.groups.map((g) => (
-            <div key={g.title} className="mt-3">
-              <h4 className="font-bold text-brand-dark">{t(g.title)}</h4>
-              {g.issues.map((l, i) => (
-                <div key={i}>
-                  <p>{t(l.text)}</p>
-                  {l.comments.map((c, j) => (
-                    <p key={j} className="ml-4 text-sm italic text-muted">
-                      {t(c)}
-                    </p>
-                  ))}
-                </div>
-              ))}
-              {g.ok.length > 0 && (
-                <p className="mt-1 text-sm text-muted">
-                  <strong>En ordre :</strong> {t(g.ok.join(" "))}
-                </p>
-              )}
-            </div>
-          ))}
+          <StepsView sections={s.steps} />
+          <FloorsView floors={s.floors} />
           {s.remarks.length > 0 && (
             <div className="mt-3">
               <h4 className="font-bold text-brand-dark">Remarques</h4>
@@ -810,6 +792,139 @@ function RichView({ value }: { value: string }) {
           </ol>
         ),
       )}
+    </div>
+  );
+}
+
+const VERDICT_CLASS = { ok: "text-[#1E7A36]", partial: "text-[#8A5A00]", no: "text-brand" } as const;
+
+/** Interpellated person: numbered procedure steps with their verdict, explained when not in order. */
+function StepsView({ sections }: { sections: StepSection[] }) {
+  if (!sections.length) return null;
+  return (
+    <div className="mt-3">
+      <h4 className="font-bold text-brand-dark">Personne interpellée</h4>
+      <table className="mt-1 w-full border-collapse text-[15px]">
+        <thead>
+          <tr className="text-left text-sm text-muted">
+            <th className="w-8 py-1 font-medium">N°</th>
+            <th className="py-1 font-medium">Étape de la procédure</th>
+            <th className="w-28 py-1 font-medium">Appréciation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sections.map((sec) => (
+            <Fragment key={sec.title}>
+              <tr className="bg-bg">
+                <td colSpan={3} className="px-1 py-1 font-bold">
+                  {typo(sec.title)}
+                </td>
+              </tr>
+              {sec.rows.map((r) => (
+                <Fragment key={r.n}>
+                  <tr className="border-t border-line align-top">
+                    <td className="py-1 text-muted">{r.n}</td>
+                    <td className="py-1">{typo(r.label)}</td>
+                    <td className={`py-1 font-bold ${VERDICT_CLASS[r.verdict]}`}>{STEP_WORD[r.verdict]}</td>
+                  </tr>
+                  {(r.finding || r.comments.length > 0) && (
+                    <tr>
+                      <td />
+                      <td colSpan={2} className="pb-2 text-sm">
+                        {r.finding && (
+                          <p>
+                            <strong>Constat :</strong> {typo(r.finding)}
+                          </p>
+                        )}
+                        {r.comments.map((c, i) => (
+                          <p key={i} className="italic text-muted">
+                            <strong>Pourquoi :</strong> {typo(c)}
+                          </p>
+                        ))}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Floors: points × zones (Oui / Partiel / Non), then the points to improve in plain words. */
+function FloorsView({ floors }: { floors: FloorTable | null }) {
+  if (!floors) return null;
+  let section = "";
+  const notes = (title: string, list: FloorNote[]) =>
+    list.length > 0 && (
+      <div className="mt-2">
+        <p className="font-bold">{title}</p>
+        <ul className="ml-5 list-disc">
+          {list.map((n) => (
+            <li key={n.label}>
+              <strong>{typo(n.label)}</strong>
+              {n.finding ? <> : {typo(n.finding)}</> : null}
+              {n.comments.map((c, i) => (
+                <p key={i} className="text-sm italic text-muted">
+                  {typo(c)}
+                </p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  return (
+    <div className="mt-3">
+      <h4 className="font-bold text-brand-dark">Dans les étages</h4>
+      <div className="overflow-x-auto">
+        <table className="mt-1 w-full border-collapse text-sm">
+          <thead>
+            <tr className="text-muted">
+              <th className="py-1 text-left font-medium">Point contrôlé</th>
+              {floors.zones.map((z) => (
+                <th key={z} className="px-1 py-1 text-center font-medium">
+                  {z}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {floors.rows.map((r) => {
+              const header = r.section !== section;
+              section = r.section;
+              return (
+                <Fragment key={r.label}>
+                  {header && (
+                    <tr className="bg-bg">
+                      <td colSpan={floors.zones.length + 1} className="px-1 py-1 font-bold">
+                        {r.section}
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="border-t border-line">
+                    <td className="py-1 pr-2">{typo(r.label)}</td>
+                    {floors.zones.map((z) => {
+                      const v = r.cells[z];
+                      return (
+                        <td key={z} className={`px-1 py-1 text-center font-bold ${v ? VERDICT_CLASS[v] : ""}`}>
+                          {v ? CELL_WORD[v] : ""}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-xs text-muted">{FLOOR_LEGEND}</p>
+      {notes("À améliorer", floors.toImprove)}
+      {notes("Précisions des observateurs", floors.precisions)}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // localStorage first, then pushed to Convex. A reload or a network cut never loses a tap.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useConvex, useMutation } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import type { AnswerValue, Role, TimeField } from "../domain/checklist";
@@ -26,6 +26,8 @@ export interface Draft {
   tClear?: number;
   updatedAt: number;
   syncedAt?: number;
+  /** Photos removed on this device, so the server drops them (it never drops one on its own). */
+  removedPhotos?: Id<"_storage">[];
 }
 
 export type SyncStatus = "synced" | "pending" | "offline" | "error";
@@ -53,6 +55,9 @@ export function useOnline(): boolean {
 export function useObservationDraft(exerciseId: Id<"exercises">, code: string, paused = false) {
   const upsert = useMutation(api.observations.upsert);
   const online = useOnline();
+  // This device's observation already on the server: restores a draft missing on the device
+  // (cleared storage, exercise merged from another one…) instead of starting from scratch.
+  const mine = useQuery(api.observations.mine, code ? { code, exerciseId, clientId: device.clientId } : "skip");
   const [draft, setDraftState] = useState<Draft | null>(() =>
     readJSON<Draft | null>(draftKey(exerciseId), null),
   );
@@ -66,6 +71,16 @@ export function useObservationDraft(exerciseId: Id<"exercises">, code: string, p
     writeJSON(draftKey(exerciseId), d);
     setDraftState(d);
   };
+
+  useEffect(() => {
+    if (!mine || latest.current?.observer) return;
+    const { _id, _creationTime, clientId, ...server } = mine;
+    void _id;
+    void _creationTime;
+    void clientId;
+    persist({ ...server, syncedAt: server.updatedAt });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine]);
 
   const setDraft = useCallback(
     (update: (d: Draft) => Draft) => {

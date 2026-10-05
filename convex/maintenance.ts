@@ -3,6 +3,7 @@
 import { internalMutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { TIME_KEYS } from "./mergeLogic";
+import { answerValue } from "./schema";
 
 /** Sets some times of an exercise (ms) and returns the previous values, for the record. */
 export const setTimes = internalMutation({
@@ -17,5 +18,19 @@ export const setTimes = internalMutation({
     }
     await ctx.db.patch(id, times);
     return { school: ex.school, before, after: times };
+  },
+});
+
+/** Puts back answers of an observation (merged with what is there) and returns the previous ones. */
+export const restoreAnswers = internalMutation({
+  args: {
+    id: v.id("observations"),
+    answers: v.record(v.string(), v.object({ v: v.optional(answerValue), c: v.optional(v.string()) })),
+  },
+  handler: async (ctx, { id, answers }) => {
+    const o = await ctx.db.get(id);
+    if (!o) throw new ConvexError("Saisie introuvable.");
+    await ctx.db.patch(id, { answers: { ...o.answers, ...answers }, updatedAt: Date.now() });
+    return { observer: o.observer, before: o.answers, after: { ...o.answers, ...answers } };
   },
 });

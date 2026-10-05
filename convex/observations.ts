@@ -17,8 +17,10 @@ export const upsert = mutation({
     photos: v.array(photo),
     tClear: v.optional(v.number()),
     updatedAt: v.number(), // client edit time, protects against stale replays
+    // Photos the user removed on this device (a missing photo alone is never a removal).
+    removedPhotos: v.optional(v.array(v.id("_storage"))),
   },
-  handler: async (ctx, { code, ...obs }) => {
+  handler: async (ctx, { code, removedPhotos, ...obs }) => {
     await assertTeam(ctx, code);
     const ex = await ctx.db.get(obs.exerciseId);
     if (!ex) throw new ConvexError("Cet exercice a été supprimé.");
@@ -32,7 +34,20 @@ export const upsert = mutation({
       return obs.updatedAt;
     }
     if (existing.updatedAt > obs.updatedAt) return existing.updatedAt; // older draft, ignore
-    await ctx.db.replace(existing._id, obs);
+    // Merge, never replace: a draft that does not know an answer (empty draft on another
+    // screen, merged exercises…) must not erase it. Undoing an answer sends the key with no value.
+    const removed = new Set<string>(removedPhotos ?? []);
+    const seen = new Set<string>();
+    const photos = [...existing.photos, ...obs.photos].filter(
+      (p) => !removed.has(p.storageId) && !seen.has(p.storageId) && !!seen.add(p.storageId),
+    );
+    await ctx.db.replace(existing._id, {
+      ...obs,
+      answers: { ...existing.answers, ...obs.answers },
+      remarks: obs.remarks ?? existing.remarks,
+      tClear: obs.tClear ?? existing.tClear,
+      photos,
+    });
     return obs.updatedAt;
   },
 });
@@ -66,5 +81,17 @@ export const byExercises = query({
     await assertTeam(ctx, code);
     const all = await Promise.all(exerciseIds.map((id) => forExercise(ctx, id)));
     return all.flat();
+  },
+});
+
+/** This device's observation already on the server (to restore a draft lost on the device). */
+export const mine = query({
+  args: { code: v.string(), exerciseId: v.id("exercises"), clientId: v.string() },
+  handler: async (ctx, { code, exerciseId, clientId }) => {
+    await assertTeam(ctx, code);
+    return await ctx.db
+      .query("observations")
+      .withIndex("by_client", (q) => q.eq("clientId", clientId).eq("exerciseId", exerciseId))
+      .first();
   },
 });

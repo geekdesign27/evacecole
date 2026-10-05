@@ -138,13 +138,14 @@ test("full exercise with three phones, offline safety and both exports", async (
   await expect(preview).toContainText(`Rapport d'exercice d'évacuation : ${school}`);
   // Once in the evaluation criteria, once in the school section
   await expect(preview.getByRole("heading", { name: "Personne interpellée", exact: true })).toHaveCount(2);
-  await expect(preview.getByRole("heading", { name: "Comportement dans les étages" })).toHaveCount(2);
+  await expect(preview.getByRole("heading", { name: "Dans les étages", exact: true })).toBeVisible();
+  await expect(preview.getByRole("cell", { name: "Pas fait" })).toBeVisible();
   await expect(preview).toContainText("Rez (Luc Morel), 1er étage (Anne Dupont)");
-  await expect(preview).toContainText("Quelques portes sont restées ouvertes (1er étage). En ordre : Rez.");
+  await expect(preview).toContainText("quelques portes sont restées ouvertes (1er étage)");
   await expect(preview).toContainText("Objectif");
-  await expect(preview).toContainText("Plusieurs portes calées constatées.");
+  await expect(preview).toContainText("plusieurs portes calées constatées (1er étage)");
   await expect(preview).toContainText("« Porte coupe-feu calée avec une chaise » (Anne Dupont, 1er étage)");
-  await expect(preview).toContainText("Plusieurs fenêtres sont restées ouvertes.");
+  await expect(preview).toContainText("plusieurs fenêtres sont restées ouvertes (Rez)");
   await expect(preview).toContainText("Fenêtres de la salle des maîtres restées ouvertes. (Luc Morel, Rez)");
   await expect(preview).toContainText("Numéro des pompiers (118) inconnu.");
   await expect(preview).not.toContainText("Proscrire le calage des portes");

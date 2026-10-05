@@ -30,3 +30,9 @@ export function factRows(facts: { label: string; value: string }[]): FactCell[][
   if (pending) rows.push([pending]);
   return rows;
 }
+
+// Wording and colours of verdicts, shared by the preview, the PDF and the Word file (words, never icons).
+export const STEP_WORD = { ok: "En ordre", partial: "Hésitant", no: "Pas fait" } as const;
+export const CELL_WORD = { ok: "Oui", partial: "Partiel", no: "Non" } as const;
+export const VERDICT_COLOR = { ok: "#1E7A36", partial: "#8A5A00", no: "#C71A1A" } as const;
+export const FLOOR_LEGEND = "Oui : en ordre. Partiel : en partie seulement. Non : pas en ordre. Case vide : sans objet ou non observé.";

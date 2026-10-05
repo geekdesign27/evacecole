@@ -142,6 +142,8 @@ test("seed a fake morning of 4 schools and export the day report", async ({ brow
   admin.on("dialog", (d) => d.accept());
   // Same wording as the app (fmtDateLong): « dimanche 4 octobre 2026 »
   const today = fmtDateLong(todayIso());
+  // Wait for the list (or its empty state) before counting
+  await expect(admin.getByRole("button", { name: /Corriger l'exercice/ }).first().or(admin.getByText("Aucun exercice."))).toBeVisible();
   for (;;) {
     const del = admin.getByRole("button", { name: new RegExp(`Supprimer l'exercice .* du ${today}`) }).first();
     if (!(await del.count())) break;

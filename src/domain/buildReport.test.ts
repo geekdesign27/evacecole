@@ -248,27 +248,61 @@ describe("buildReport", () => {
     expect(report.intro).not.toContain("Objectif");
   });
 
-  it("compiles the team's answers point by point: issues with zones first, then compliant points", () => {
-    expect(school.zonesObserved).toBe("Rez (Luc Morel), 1er étage (Anne Dupont)");
-    expect(school.groups.map((g) => g.title)).toEqual(["Personne interpellée", "Comportement dans les étages"]);
-    const [person, floors] = school.groups;
-    expect(person.issues.map((l) => l.text)).toEqual(["Numéro des pompiers (118) inconnu."]);
-    expect(person.ok).toHaveLength(11);
-    // N/A points are left out
-    expect(JSON.stringify(person)).not.toContain("Local du sinistre");
-    expect(floors.issues.map((l) => l.text)).toEqual([
-      "Quelques portes sont restées ouvertes (1er étage). En ordre : Rez.",
-      "Plusieurs portes calées constatées (Rez). En ordre : 1er étage.",
+  it("presents the interpellated person as numbered steps, in procedure order", () => {
+    expect(school.steps.map((x) => x.title)).toEqual(["Réaction de la personne interpellée", "Organisation et matériel"]);
+    const [reaction, orga] = school.steps;
+    // N/A (step 3, the fire room) is left out; numbering follows the procedure
+    expect(reaction.rows.map((r) => [r.n, r.verdict])).toEqual([
+      [1, "ok"],
+      [2, "ok"],
+      [4, "ok"],
+      [5, "ok"],
+      [6, "ok"],
+      [7, "no"],
     ]);
-    expect(floors.ok).toEqual(["Élèves calmes."]);
+    expect(reaction.rows[5]).toEqual({
+      n: 7,
+      label: "Connaît le numéro des pompiers (118)",
+      verdict: "no",
+      finding: "Numéro des pompiers (118) inconnu.",
+      comments: [],
+    });
+    expect(orga.rows.map((r) => r.n)).toEqual([8, 9, 10, 11, 12, 13]);
+  });
+
+  it("shows the floors as a points × zones table, and explains only what is to improve", () => {
+    const f = school.floors!;
+    expect(f.zones).toEqual(["Rez", "1er étage"]);
+    expect(f.rows.map((r) => [r.label, r.cells["Rez"], r.cells["1er étage"]])).toEqual([
+      ["Élèves calmes", "ok", "ok"],
+      ["Portes fermées après le passage", "ok", "partial"],
+      ["Aucune porte calée", "no", "ok"],
+    ]);
+    expect(f.toImprove).toEqual([
+      { label: "Portes fermées après le passage", finding: "quelques portes sont restées ouvertes (1er étage).", comments: [] },
+      { label: "Aucune porte calée", finding: "plusieurs portes calées constatées (Rez).", comments: [] },
+    ]);
+    expect(school.zonesObserved).toBe("Rez (Luc Morel), 1er étage (Anne Dupont)");
     expect(school.remarks).toEqual(["WC du 1er non contrôlés. (Anne Dupont, 1er étage)"]);
     expect(school.photos[0].caption).toBe("Aucune porte calée : Porte coupe-feu (Anne Dupont, 1er étage)");
   });
 
-  it("keeps a compliant point with a comment among the detailed lines", () => {
+  it("keeps an observer's comment on a point in order as a precision", () => {
     const r = buildReport([exercise], [obs({ zone: "Rez", answers: { o_doors: { v: "ok", c: "Vérifié salle par salle" } } })]);
-    expect(r.schools[0].groups[0].issues[0]).toEqual({ text: "Portes fermées.", comments: ["« Vérifié salle par salle » (Anne Dupont, Rez)"] });
-    expect(r.schools[0].groups[0].ok).toEqual([]);
+    expect(r.schools[0].floors!.precisions).toEqual([
+      { label: "Portes fermées après le passage", comments: ["« Vérifié salle par salle » (Anne Dupont, Rez)"] },
+    ]);
+    expect(r.schools[0].floors!.toImprove).toEqual([]);
+  });
+
+  it("signs the interpellator's comments as « interpellateur », not with a zone", () => {
+    const r = buildReport([exercise], [obs({ observer: "PA Schütz", role: "lead", zone: "1er étage", answers: { l_118: { v: "no", c: "Confondu avec le 144" } } })]);
+    expect(r.schools[0].steps[0].rows[0].comments).toEqual(["« Confondu avec le 144 » (PA Schütz, interpellateur)"]);
+  });
+
+  it("words an inverted alarm order without contradiction", () => {
+    const r = buildReport([exercise], [obs({ role: "lead", answers: { l_order: { v: "no" }, l_firealarm: { v: "ok" }, l_evacbtn: { v: "ok" } } })]);
+    expect(r.schools[0].steps[0].rows.find((x) => x.n === 5)!.finding).toBe("Ordre des alarmes inversé : évacuation déclenchée avant l'alarme pompiers.");
   });
 
   it("pre-fills the evaluation criteria from the checklist, and keeps an edited version", () => {
@@ -287,7 +321,7 @@ describe("buildReport", () => {
     const missingIds = school.missing.map((m) => m.itemId);
     expect(missingIds).toContain("o_audible");
     expect(missingIds).not.toContain("l_closedoor");
-    const text = JSON.stringify(school.groups);
+    const text = JSON.stringify([school.steps, school.floors]);
     expect(text).not.toContain("Alarme évacuation audible");
   });
 

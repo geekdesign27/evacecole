@@ -17,8 +17,8 @@ import {
   WidthType,
   type FileChild,
 } from "docx";
-import type { ReportGroup, ReportLine, ReportModel, SchoolReport } from "../domain/buildReport";
-import { factRows } from "./layout";
+import type { FloorNote, FloorTable, ReportModel, SchoolReport, StepSection } from "../domain/buildReport";
+import { CELL_WORD, factRows, FLOOR_LEGEND, STEP_WORD, VERDICT_COLOR } from "./layout";
 import { dataUrlToBytes, type RasterImage } from "../lib/images";
 import { typo } from "../lib/typo";
 import { mapRuns, parseRich, type RichRun } from "../domain/rich";
@@ -130,34 +130,129 @@ function image(
   });
 }
 
-function lineParagraphs(line: ReportLine): Paragraph[] {
-  return [
-    new Paragraph({ spacing: { after: 20 }, children: [new TextRun(t(line.text))] }),
-    ...line.comments.map(
-      (c) =>
-        new Paragraph({
-          indent: { left: 300 },
-          spacing: { after: 20 },
-          children: [new TextRun({ text: t(c), italics: true, color: MUTED, size: 18 })],
-        }),
-    ),
-  ];
+
+const hex = (c: string) => c.replace("#", "");
+const GREY = "F4F5F7";
+
+function cell(children: Paragraph[], width: number, opts: { span?: number; fill?: string } = {}) {
+  return new TableCell({
+    borders,
+    margins: { top: 30, bottom: 30, left: 70, right: 70 },
+    columnSpan: opts.span,
+    width: { size: width, type: WidthType.DXA },
+    shading: opts.fill ? { type: ShadingType.CLEAR, fill: opts.fill, color: "auto" } : undefined,
+    children,
+  });
 }
 
-function groupParagraphs(g: ReportGroup): Paragraph[] {
-  const out: Paragraph[] = [heading(g.title, HeadingLevel.HEADING_3)];
-  for (const line of g.issues) out.push(...lineParagraphs(line));
-  if (g.ok.length) {
-    out.push(
-      new Paragraph({
-        spacing: { before: 40 },
+const para = (text: string, o: { bold?: boolean; italics?: boolean; color?: string; size?: number; center?: boolean } = {}) =>
+  new Paragraph({
+    alignment: o.center ? AlignmentType.CENTER : undefined,
+    children: [new TextRun({ text: t(text), bold: o.bold, italics: o.italics, color: o.color, size: o.size ?? 19 })],
+  });
+
+/** Interpellated person: numbered steps, verdict in words, explanation when not in order. */
+function stepsTable(sections: StepSection[]): FileChild[] {
+  if (!sections.length) return [];
+  const w = [500, CONTENT_WIDTH - 500 - 1500, 1500];
+  const rows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        cell([para("N°", { bold: true, color: MUTED, size: 17 })], w[0]),
+        cell([para("Étape de la procédure", { bold: true, color: MUTED, size: 17 })], w[1]),
+        cell([para("Appréciation", { bold: true, color: MUTED, size: 17 })], w[2]),
+      ],
+    }),
+  ];
+  for (const sec of sections) {
+    rows.push(new TableRow({ children: [cell([para(sec.title, { bold: true })], CONTENT_WIDTH, { span: 3, fill: GREY })] }));
+    for (const r of sec.rows) {
+      rows.push(
+        new TableRow({
+          cantSplit: true,
+          children: [
+            cell([para(String(r.n), { color: MUTED })], w[0]),
+            cell([para(r.label)], w[1]),
+            cell([para(STEP_WORD[r.verdict], { bold: true, color: hex(VERDICT_COLOR[r.verdict]) })], w[2]),
+          ],
+        }),
+      );
+      if (r.finding || r.comments.length) {
+        const lines: Paragraph[] = [];
+        if (r.finding)
+          lines.push(new Paragraph({ children: [new TextRun({ text: "Constat : ", bold: true, size: 17 }), new TextRun({ text: t(r.finding), size: 17 })] }));
+        for (const c of r.comments)
+          lines.push(
+            new Paragraph({
+              children: [
+                new TextRun({ text: "Pourquoi : ", bold: true, italics: true, size: 17, color: MUTED }),
+                new TextRun({ text: t(c), italics: true, size: 17, color: MUTED }),
+              ],
+            }),
+          );
+        rows.push(new TableRow({ cantSplit: true, children: [cell([para("")], w[0]), cell(lines, w[1] + w[2], { span: 2 })] }));
+      }
+    }
+  }
+  return [heading("Personne interpellée", HeadingLevel.HEADING_3), new Table({ width: { size: CONTENT_WIDTH, type: WidthType.DXA }, columnWidths: w, rows })];
+}
+
+/** Floors: points × zones table, legend, then points to improve and observers' precisions. */
+function floorsTable(f: FloorTable | null): FileChild[] {
+  if (!f) return [];
+  const zoneW = Math.max(800, Math.min(1300, Math.floor(5600 / f.zones.length)));
+  const labelW = CONTENT_WIDTH - zoneW * f.zones.length;
+  const w = [labelW, ...f.zones.map(() => zoneW)];
+  const rows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      children: [
+        cell([para("Point contrôlé", { bold: true, color: MUTED, size: 16 })], labelW),
+        ...f.zones.map((z) => cell([para(z, { bold: true, color: MUTED, size: 16, center: true })], zoneW)),
+      ],
+    }),
+  ];
+  let section = "";
+  for (const r of f.rows) {
+    if (r.section !== section) {
+      section = r.section;
+      rows.push(new TableRow({ children: [cell([para(section, { bold: true, size: 18 })], CONTENT_WIDTH, { span: f.zones.length + 1, fill: GREY })] }));
+    }
+    rows.push(
+      new TableRow({
+        cantSplit: true,
         children: [
-          new TextRun({ text: t("En ordre : "), bold: true, color: MUTED, size: 19 }),
-          new TextRun({ text: t(g.ok.join(" ")), color: MUTED, size: 19 }),
+          cell([para(r.label, { size: 18 })], labelW),
+          ...f.zones.map((z) => {
+            const v = r.cells[z];
+            return cell([v ? para(CELL_WORD[v], { bold: true, color: hex(VERDICT_COLOR[v]), size: 18, center: true }) : para("")], zoneW);
+          }),
         ],
       }),
     );
   }
+  const out: FileChild[] = [
+    heading("Dans les étages", HeadingLevel.HEADING_3),
+    new Table({ width: { size: CONTENT_WIDTH, type: WidthType.DXA }, columnWidths: w, rows }),
+    para(FLOOR_LEGEND, { color: MUTED, size: 16 }),
+  ];
+  const notes = (title: string, list: FloorNote[]) => {
+    if (!list.length) return;
+    out.push(new Paragraph({ spacing: { before: 120 }, keepNext: true, children: [new TextRun({ text: t(title), bold: true })] }));
+    for (const n of list) {
+      out.push(
+        new Paragraph({
+          numbering: { reference: "bullets", level: 0 },
+          children: [new TextRun({ text: t(`${n.label}${n.finding ? " : " : ""}`), bold: true }), new TextRun(n.finding ? t(n.finding) : "")],
+        }),
+      );
+      for (const c of n.comments)
+        out.push(new Paragraph({ indent: { left: 400 }, children: [new TextRun({ text: t(c), italics: true, color: MUTED, size: 18 })] }));
+    }
+  };
+  notes("À améliorer", f.toImprove);
+  notes("Précisions des observateurs", f.precisions);
   return out;
 }
 
@@ -216,7 +311,7 @@ function schoolBlock(s: SchoolReport, model: ReportModel, assets: ExportAssets):
       }),
     );
   }
-  for (const g of s.groups) out.push(...groupParagraphs(g));
+  out.push(...stepsTable(s.steps), ...floorsTable(s.floors));
   if (s.remarks.length) {
     out.push(heading("Remarques", HeadingLevel.HEADING_3));
     for (const r of s.remarks) out.push(new Paragraph({ spacing: { after: 20 }, children: [new TextRun(t(r))] }));

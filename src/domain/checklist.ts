@@ -85,8 +85,8 @@ export const SECTIONS: ChecklistSection[] = [
         id: "l_order",
         label: "Ordre respecté : pompiers puis évacuation",
         ok: "Ordre respecté : alarme pompiers, puis évacuation.",
-        partial: "Ordre des alarmes inversé.",
-        no: "Une des deux alarmes n'a pas été déclenchée.",
+        partial: "Ordre respecté après hésitation.",
+        no: "Ordre des alarmes inversé : évacuation déclenchée avant l'alarme pompiers.",
         reco: "formation",
       },
       {
