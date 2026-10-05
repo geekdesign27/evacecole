@@ -65,6 +65,7 @@ Variable d'environnement Convex de production : `TEAM_CODE` (Dashboard Convex, S
 - **Recommandations** : texte libre de l'auteur. Les recommandations déduites des points Partiel/Non sont proposées
   par le bouton « Insérer les suggestions ».
 - **Objectif** et **Critères d'évaluation** : sections éditables sous l'introduction. Les critères sont préremplis depuis `checklist.ts` (`defaultCriteria`), donc toujours alignés sur la grille.
+- **Fusion d'exercices** (Gestion › Exercices) : B versé dans A puis supprimé. Heures : la plus tôt pour début, alarme, évacuation ; la plus tard pour présents, quittance, fin. Champs vides de A complétés par B, notes gardées, même téléphone dans les deux : saisies réunies (`convex/mergeLogic.ts`).
 - **Suppression d'exercice** : réservée à la page « Gestion », définitive (saisies et photos comprises).
 
 - Table `dayReports` ajoutée : textes éditables du rapport de journée (un rapport de journée n'appartient à aucun exercice).

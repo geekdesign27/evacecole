@@ -1,4 +1,6 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { fillEmpty, mergeObservation, mergeRecords, mergeTimes } from "./mergeLogic";
 import { ConvexError, v } from "convex/values";
 import { assertAdmin, isCodeActive, zurichToday } from "./lib";
 
@@ -363,5 +365,80 @@ export const setLocked = mutation({
     for (const id of ids) {
       await ctx.db.patch(id, locked ? { locked: true, lockedAt: Date.now() } : { locked: false, lockedAt: undefined });
     }
+  },
+});
+
+// Merging two exercises created twice for the same school (half of the team in each)
+
+const TEXT_FIELDS = ["classroom", "teacher", "fireLocation", "fireDetail", "leadName"] as const;
+
+async function loadPair(ctx: QueryCtx, targetId: Id<"exercises">, sourceId: Id<"exercises">) {
+  if (targetId === sourceId) throw new ConvexError("Choisis deux exercices différents.");
+  const [target, source] = await Promise.all([ctx.db.get(targetId), ctx.db.get(sourceId)]);
+  if (!target || !source) throw new ConvexError("Exercice introuvable.");
+  const obsOf = (id: Id<"exercises">) =>
+    ctx.db
+      .query("observations")
+      .withIndex("by_exercise", (q) => q.eq("exerciseId", id))
+      .collect();
+  const [tObs, sObs] = await Promise.all([obsOf(targetId), obsOf(sourceId)]);
+  return { target, source, tObs, sObs };
+}
+
+/** What the merge will do, shown to the admin before confirming. */
+export const mergePreview = query({
+  args: { token: v.string(), targetId: v.id("exercises"), sourceId: v.id("exercises") },
+  handler: async (ctx, { token, targetId, sourceId }) => {
+    await assertAdmin(ctx, token);
+    const { target, source, tObs, sObs } = await loadPair(ctx, targetId, sourceId);
+    const sameDevice = sObs.filter((s) => tObs.some((t) => t.clientId === s.clientId)).length;
+    const people = (list: typeof tObs) =>
+      list.map((o) => `${o.observer}${o.zone ? ` (${o.zone})` : o.role === "lead" ? " (interpellateur)" : ""}`);
+    return {
+      target: { school: target.school, exDate: target.exDate, people: people(tObs), photos: tObs.reduce((n, o) => n + o.photos.length, 0) },
+      source: { school: source.school, exDate: source.exDate, people: people(sObs), photos: sObs.reduce((n, o) => n + o.photos.length, 0) },
+      times: mergeTimes(target, source),
+      filled: Object.keys(fillEmpty(target, source, [...TEXT_FIELDS])),
+      sameDevice,
+      locked: !!(target.locked || source.locked),
+    };
+  },
+});
+
+export const mergeExercises = mutation({
+  args: { token: v.string(), targetId: v.id("exercises"), sourceId: v.id("exercises") },
+  handler: async (ctx, { token, targetId, sourceId }) => {
+    await assertAdmin(ctx, token);
+    const { target, source, tObs, sObs } = await loadPair(ctx, targetId, sourceId);
+
+    // Exercise: times, empty fields, notes and report texts.
+    const times = Object.fromEntries(mergeTimes(target, source).map((d) => [d.field, d.kept]));
+    await ctx.db.patch(targetId, {
+      ...times,
+      ...fillEmpty(target, source, [...TEXT_FIELDS]),
+      timingNotes: mergeRecords(target.timingNotes, source.timingNotes),
+      report: { ...source.report, ...target.report }, // the target's texts win
+      ...(target.locked || source.locked ? { locked: true, lockedAt: target.lockedAt ?? source.lockedAt ?? Date.now() } : {}),
+    });
+
+    // Observations: moved, or combined when the same device wrote in both.
+    let moved = 0;
+    let combined = 0;
+    for (const s of sObs) {
+      const twin = tObs.find((t) => t.clientId === s.clientId);
+      if (twin) {
+        const m = mergeObservation(twin, s);
+        const { _id, _creationTime, ...rest } = m;
+        void _creationTime;
+        await ctx.db.replace(_id, { ...rest, exerciseId: targetId });
+        await ctx.db.delete(s._id);
+        combined++;
+      } else {
+        await ctx.db.patch(s._id, { exerciseId: targetId });
+        moved++;
+      }
+    }
+    await ctx.db.delete(sourceId);
+    return { moved, combined };
   },
 });

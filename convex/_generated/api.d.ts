@@ -15,6 +15,7 @@ import type * as lib from "../lib.js";
 import type * as mail from "../mail.js";
 import type * as mailData from "../mailData.js";
 import type * as mailTemplates from "../mailTemplates.js";
+import type * as mergeLogic from "../mergeLogic.js";
 import type * as observations from "../observations.js";
 import type * as team from "../team.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   mail: typeof mail;
   mailData: typeof mailData;
   mailTemplates: typeof mailTemplates;
+  mergeLogic: typeof mergeLogic;
   observations: typeof observations;
   team: typeof team;
 }>;
