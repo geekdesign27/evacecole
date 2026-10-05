@@ -1,6 +1,6 @@
 import { mutation, query, type QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
-import { fillEmpty, mergeObservation, mergeRecords, mergeTimes } from "./mergeLogic";
+import type { Doc, Id } from "./_generated/dataModel";
+import { duplicateGroups, evacuationMs, mergeObservation, pickMaster, TIME_KEYS, timesCount } from "./mergeLogic";
 import { ConvexError, v } from "convex/values";
 import { assertAdmin, isCodeActive, zurichToday } from "./lib";
 
@@ -368,77 +368,136 @@ export const setLocked = mutation({
   },
 });
 
-// Merging two exercises created twice for the same school (half of the team in each)
+// Merging exercises created several times for the same school on the same day.
+// The master gives every time and the organisation; the others only bring their people's input.
 
-const TEXT_FIELDS = ["classroom", "teacher", "fireLocation", "fireDetail", "leadName"] as const;
 
-async function loadPair(ctx: QueryCtx, targetId: Id<"exercises">, sourceId: Id<"exercises">) {
-  if (targetId === sourceId) throw new ConvexError("Choisis deux exercices différents.");
-  const [target, source] = await Promise.all([ctx.db.get(targetId), ctx.db.get(sourceId)]);
-  if (!target || !source) throw new ConvexError("Exercice introuvable.");
-  const obsOf = (id: Id<"exercises">) =>
-    ctx.db
-      .query("observations")
-      .withIndex("by_exercise", (q) => q.eq("exerciseId", id))
-      .collect();
-  const [tObs, sObs] = await Promise.all([obsOf(targetId), obsOf(sourceId)]);
-  return { target, source, tObs, sObs };
+type Ex = Doc<"exercises">;
+
+async function observationsOf(ctx: QueryCtx, id: Id<"exercises">) {
+  return ctx.db
+    .query("observations")
+    .withIndex("by_exercise", (q) => q.eq("exerciseId", id))
+    .collect();
 }
 
-/** What the merge will do, shown to the admin before confirming. */
-export const mergePreview = query({
-  args: { token: v.string(), targetId: v.id("exercises"), sourceId: v.id("exercises") },
-  handler: async (ctx, { token, targetId, sourceId }) => {
+async function summary(ctx: QueryCtx, ex: Ex) {
+  const obs = await observationsOf(ctx, ex._id);
+  return {
+    _id: ex._id,
+    school: ex.school,
+    exDate: ex.exDate,
+    classroom: ex.classroom,
+    teacher: ex.teacher,
+    times: Object.fromEntries(TIME_KEYS.map((k) => [k, ex[k]])) as Record<string, number | undefined>,
+    timesCount: timesCount(ex),
+    evacuationMs: evacuationMs(ex),
+    locked: !!ex.locked,
+    people: obs.map((o) => `${o.observer}${o.zone ? ` (${o.zone})` : o.role === "lead" ? " (interpellateur)" : ""}`),
+    photos: obs.reduce((n, o) => n + o.photos.length, 0),
+  };
+}
+
+/** Every group of exercises with the same school on the same day, with the suggested master. */
+export const duplicates = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
     await assertAdmin(ctx, token);
-    const { target, source, tObs, sObs } = await loadPair(ctx, targetId, sourceId);
-    const sameDevice = sObs.filter((s) => tObs.some((t) => t.clientId === s.clientId)).length;
-    const people = (list: typeof tObs) =>
-      list.map((o) => `${o.observer}${o.zone ? ` (${o.zone})` : o.role === "lead" ? " (interpellateur)" : ""}`);
-    return {
-      target: { school: target.school, exDate: target.exDate, people: people(tObs), photos: tObs.reduce((n, o) => n + o.photos.length, 0) },
-      source: { school: source.school, exDate: source.exDate, people: people(sObs), photos: sObs.reduce((n, o) => n + o.photos.length, 0) },
-      times: mergeTimes(target, source),
-      filled: Object.keys(fillEmpty(target, source, [...TEXT_FIELDS])),
-      sameDevice,
-      locked: !!(target.locked || source.locked),
-    };
+    const all = await ctx.db.query("exercises").collect();
+    const groups = duplicateGroups(all);
+    return Promise.all(
+      groups.map(async (g) => ({
+        masterId: pickMaster(g)._id,
+        members: await Promise.all(g.map((ex) => summary(ctx, ex))),
+      })),
+    );
   },
 });
 
-export const mergeExercises = mutation({
-  args: { token: v.string(), targetId: v.id("exercises"), sourceId: v.id("exercises") },
-  handler: async (ctx, { token, targetId, sourceId }) => {
+/** Preview of an arbitrary merge (manual tool): master first, then the others. */
+export const mergePreview = query({
+  args: { token: v.string(), masterId: v.id("exercises"), sourceIds: v.array(v.id("exercises")) },
+  handler: async (ctx, { token, masterId, sourceIds }) => {
     await assertAdmin(ctx, token);
-    const { target, source, tObs, sObs } = await loadPair(ctx, targetId, sourceId);
+    const ids = [masterId, ...sourceIds.filter((id) => id !== masterId)];
+    const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    if (docs.some((d) => !d)) throw new ConvexError("Exercice introuvable.");
+    return Promise.all((docs as Ex[]).map((ex) => summary(ctx, ex)));
+  },
+});
 
-    // Exercise: times, empty fields, notes and report texts.
-    const times = Object.fromEntries(mergeTimes(target, source).map((d) => [d.field, d.kept]));
-    await ctx.db.patch(targetId, {
-      ...times,
-      ...fillEmpty(target, source, [...TEXT_FIELDS]),
-      timingNotes: mergeRecords(target.timingNotes, source.timingNotes),
-      report: { ...source.report, ...target.report }, // the target's texts win
-      ...(target.locked || source.locked ? { locked: true, lockedAt: target.lockedAt ?? source.lockedAt ?? Date.now() } : {}),
+export const mergeGroup = mutation({
+  args: { token: v.string(), masterId: v.id("exercises"), sourceIds: v.array(v.id("exercises")) },
+  handler: async (ctx, { token, masterId, sourceIds }) => {
+    await assertAdmin(ctx, token);
+    const others = [...new Set(sourceIds)].filter((id) => id !== masterId);
+    if (!others.length) throw new ConvexError("Choisis au moins un exercice à verser dans le maître.");
+    const master = await ctx.db.get(masterId);
+    if (!master) throw new ConvexError("Exercice maître introuvable.");
+    const sources: Ex[] = [];
+    for (const id of others) {
+      const ex = await ctx.db.get(id);
+      if (!ex) throw new ConvexError("Exercice introuvable.");
+      sources.push(ex);
+    }
+
+    // Times, organisation and timing notes stay the master's. Report texts: the master's, completed.
+    let report: Record<string, string> = {};
+    for (const s of sources) report = { ...report, ...s.report };
+    const anyLocked = master.locked || sources.some((s) => s.locked);
+    await ctx.db.patch(masterId, {
+      report: { ...report, ...master.report },
+      ...(anyLocked ? { locked: true, lockedAt: master.lockedAt ?? Date.now() } : {}),
     });
 
-    // Observations: moved, or combined when the same device wrote in both.
+    // Observations: moved, or combined when the same device wrote in several of them.
     let moved = 0;
     let combined = 0;
-    for (const s of sObs) {
-      const twin = tObs.find((t) => t.clientId === s.clientId);
-      if (twin) {
-        const m = mergeObservation(twin, s);
-        const { _id, _creationTime, ...rest } = m;
-        void _creationTime;
-        await ctx.db.replace(_id, { ...rest, exerciseId: targetId });
-        await ctx.db.delete(s._id);
-        combined++;
-      } else {
-        await ctx.db.patch(s._id, { exerciseId: targetId });
-        moved++;
+    const inMaster = await observationsOf(ctx, masterId);
+    for (const s of sources) {
+      for (const o of await observationsOf(ctx, s._id)) {
+        const twin = inMaster.find((t) => t.clientId === o.clientId);
+        if (twin) {
+          const m = mergeObservation(twin, o);
+          const { _id, _creationTime, ...rest } = m;
+          void _creationTime;
+          await ctx.db.replace(_id, { ...rest, exerciseId: masterId });
+          Object.assign(twin, m);
+          await ctx.db.delete(o._id);
+          combined++;
+        } else {
+          await ctx.db.patch(o._id, { exerciseId: masterId });
+          inMaster.push({ ...o, exerciseId: masterId });
+          moved++;
+        }
       }
+      await ctx.db.delete(s._id);
     }
-    await ctx.db.delete(sourceId);
-    return { moved, combined };
+    return { moved, combined, removed: sources.length };
+  },
+});
+
+/** Admin correction of an exercise's organisation and times (to the second), even when closed. */
+export const correctExercise = mutation({
+  args: {
+    token: v.string(),
+    id: v.id("exercises"),
+    classroom: v.optional(v.string()),
+    teacher: v.optional(v.string()),
+    fireLocation: v.optional(v.union(v.literal("classe"), v.literal("ailleurs"), v.null())),
+    fireDetail: v.optional(v.string()),
+    times: v.record(v.string(), v.union(v.number(), v.null())),
+  },
+  handler: async (ctx, { token, id, times, fireLocation, ...org }) => {
+    await assertAdmin(ctx, token);
+    if (!(await ctx.db.get(id))) throw new ConvexError("Exercice introuvable.");
+    const patch: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(org)) patch[k] = val?.trim() ? val.trim().slice(0, 200) : undefined;
+    if (fireLocation !== undefined) patch.fireLocation = fireLocation ?? undefined;
+    for (const [k, t] of Object.entries(times)) {
+      if (!(TIME_KEYS as readonly string[]).includes(k)) throw new ConvexError(`Champ inconnu : ${k}`);
+      patch[k] = t ?? undefined;
+    }
+    await ctx.db.patch(id, patch);
   },
 });

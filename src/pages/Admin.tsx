@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Ban, CalendarClock, Check, Copy, LogOut, Merge, QrCode, RotateCcw, Smartphone, X } from "lucide-react";
+import { Ban, CalendarClock, Check, Copy, LogOut, Merge, Pencil, QrCode, RotateCcw, Smartphone, X } from "lucide-react";
 import type React from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { QRCodeSVG } from "qrcode.react";
@@ -799,6 +799,7 @@ function Exercises({ token }: { token: string }) {
         Supprimer efface définitivement l'exercice, toutes les saisies et les photos. Pour seulement le masquer, archive-le.
       </p>
       {error && <ErrorBox>{error}</ErrorBox>}
+      <Duplicates token={token} />
       {list && list.length > 1 && <MergeTool token={token} list={list} />}
       {list === undefined ? (
         <Spinner />
@@ -806,11 +807,7 @@ function Exercises({ token }: { token: string }) {
         <ul className="flex flex-col">
           {list.length === 0 && <li className="text-muted">Aucun exercice.</li>}
           {list.map((ex) => (
-            <li key={ex._id} className="flex min-h-12 items-center justify-between gap-2 border-b border-line py-1 last:border-0">
-              <div className="min-w-0">
-                <p className="truncate font-medium">{ex.school}</p>
-                <p className="text-sm text-muted">{fmtDateLong(ex.exDate)}</p>
-              </div>
+            <ExerciseRow key={ex._id} ex={ex} token={token}>
               <Button
                 variant="secondary"
                 className="shrink-0 text-brand"
@@ -827,7 +824,7 @@ function Exercises({ token }: { token: string }) {
               >
                 Supprimer
               </Button>
-            </li>
+            </ExerciseRow>
           ))}
         </ul>
       )}
@@ -843,34 +840,146 @@ const TIME_NAMES: Record<string, string> = {
   tFiremen: "Quittance aux pompiers",
   tEnd: "Fin",
 };
-const FIELD_NAMES: Record<string, string> = {
-  classroom: "classe",
-  teacher: "enseignant·e",
-  fireLocation: "lieu du sinistre",
-  fireDetail: "précision du sinistre",
-  leadName: "interpellateur",
-};
+const TIME_ORDER = ["tStart", "tAlarm", "tEvac", "tPresent", "tFiremen", "tEnd"] as const;
 
 const hhmm = (ms?: number) => (ms ? new Date(ms).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "non relevé");
+const duration = (ms?: number) => {
+  if (ms === undefined) return "non mesurée";
+  const t = Math.round(ms / 1000);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  return h ? `${h} h ${String(m).padStart(2, "0")} min` : `${m} min ${t % 60} s`;
+};
 
-/** Two exercises created for the same school: preview, then merge B into A. */
-function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] }) {
-  // Suggest the first pair « same school, same date ».
-  const pair = (() => {
-    for (const a of list) {
-      const b = list.find((x) => x._id !== a._id && x.exDate === a.exDate && x.school.trim().toLowerCase() === a.school.trim().toLowerCase());
-      if (b) return [a._id, b._id] as const;
+type Member = {
+  _id: Id<"exercises">;
+  school: string;
+  exDate: string;
+  classroom?: string;
+  teacher?: string;
+  times: Record<string, number | undefined>;
+  timesCount: number;
+  evacuationMs?: number;
+  locked: boolean;
+  people: string[];
+  photos: number;
+};
+
+function MemberCard({ m, master, onPick, name }: { m: Member; master: boolean; onPick: () => void; name: string }) {
+  return (
+    <label className={`flex cursor-pointer gap-3 rounded-xl border-2 p-3 ${master ? "border-ok bg-white" : "border-line bg-white"}`}>
+      <input type="radio" name={name} checked={master} onChange={onPick} className="mt-1 h-6 w-6 shrink-0 accent-ok" />
+      <span className="flex min-w-0 flex-col gap-0.5 text-sm">
+        <span className="font-bold">
+          {master ? "Maître : heures et organisation" : "Versé dans le maître puis supprimé"}
+        </span>
+        <span>
+          Évacuation <strong>{duration(m.evacuationMs)}</strong> · {m.timesCount}/6 heures · début {hhmm(m.times.tStart)}
+        </span>
+        <span className="text-muted">
+          Classe {m.classroom || "non relevée"} · {m.teacher || "enseignant·e non relevé·e"}
+        </span>
+        <span className="text-muted">
+          {m.people.join(", ") || "aucune saisie"} · {m.photos} photo{m.photos > 1 ? "s" : ""}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/** Groups of exercises for the same school on the same day: suggested master, then one-tap merge. */
+function Duplicates({ token }: { token: string }) {
+  const groups = useQuery(api.admin.duplicates, { token });
+  const merge = useMutation(api.admin.mergeGroup);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!groups || groups.length === 0) return msg ? <p className="mb-3 font-medium" role="status">{msg}</p> : null;
+
+  type Group = NonNullable<typeof groups>[number];
+  const masterOf = (g: Group) => chosen[g.members[0]._id] ?? g.masterId;
+
+  async function run(list: Group[]) {
+    const n = list.length;
+    if (!window.confirm(`Fusionner ${n} groupe${n > 1 ? "s" : ""} ? Les exercices non maîtres sont supprimés, leurs saisies et photos passent dans le maître.`)) return;
+    setBusy(true);
+    setError(null);
+    let moved = 0;
+    let removed = 0;
+    try {
+      for (const g of list) {
+        const master = masterOf(g);
+        const r = await merge({ token, masterId: master as Id<"exercises">, sourceIds: g.members.filter((m) => m._id !== master).map((m) => m._id) });
+        moved += r.moved + r.combined;
+        removed += r.removed;
+      }
+      setMsg(`Fusion faite : ${removed} exercice${removed > 1 ? "s" : ""} versé${removed > 1 ? "s" : ""}, ${moved} saisie${moved > 1 ? "s" : ""} regroupée${moved > 1 ? "s" : ""}.`);
+    } catch (e) {
+      setError(errorMessage(e, "Fusion impossible."));
+    } finally {
+      setBusy(false);
     }
-    return null;
-  })();
+  }
+
+  return (
+    <div className="mb-4 flex flex-col gap-3 rounded-xl border-2 border-amber bg-amber/10 p-3" aria-label="Doublons à fusionner">
+      <p className="font-bold">
+        {groups.length} école{groups.length > 1 ? "s ont" : " a"} plusieurs exercices le même jour
+      </p>
+      <p className="text-sm">
+        Le maître proposé est celui dont l'évacuation mesurée est la plus courte (sinon celui qui a le plus d'heures). Il garde ses heures et son
+        organisation ; les autres n'apportent que les saisies des personnes. Tu peux choisir un autre maître.
+      </p>
+      {groups.map((g) => {
+        const master = masterOf(g);
+        return (
+          <div key={g.masterId} className="flex flex-col gap-2">
+            <p className="font-medium">
+              {g.members[0].school}, {fmtDateLong(g.members[0].exDate)}
+            </p>
+            {[...g.members]
+              .sort((a, b) => (a._id === master ? -1 : b._id === master ? 1 : 0))
+              .map((m) => (
+                <MemberCard
+                  key={m._id}
+                  m={m}
+                  master={m._id === master}
+                  name={`master-${g.masterId}`}
+                  onPick={() => setChosen((c) => ({ ...c, [g.members[0]._id]: m._id }))}
+                />
+              ))}
+            <Button variant="dark" disabled={busy} onClick={() => run([g])}>
+              Fusionner ce groupe
+            </Button>
+          </div>
+        );
+      })}
+      {groups.length > 1 && (
+        <Button disabled={busy} onClick={() => run(groups)}>
+          Tout fusionner ({groups.length} groupes)
+        </Button>
+      )}
+      {error && <ErrorBox>{error}</ErrorBox>}
+      {msg && (
+        <p className="font-medium" role="status">
+          {msg}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Manual merge of any two exercises: A is the master (times and organisation). */
+function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] }) {
   const [open, setOpen] = useState(false);
-  const [targetId, setTargetId] = useState<string>(pair?.[0] ?? "");
-  const [sourceId, setSourceId] = useState<string>(pair?.[1] ?? "");
-  const merge = useMutation(api.admin.mergeExercises);
+  const [targetId, setTargetId] = useState("");
+  const [sourceId, setSourceId] = useState("");
+  const merge = useMutation(api.admin.mergeGroup);
   const ready = targetId && sourceId && targetId !== sourceId;
   const preview = useQuery(
     api.admin.mergePreview,
-    open && ready ? { token, targetId: targetId as Id<"exercises">, sourceId: sourceId as Id<"exercises"> } : "skip",
+    open && ready ? { token, masterId: targetId as Id<"exercises">, sourceIds: [sourceId as Id<"exercises">] } : "skip",
   );
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -880,13 +989,8 @@ function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] })
   if (!open) {
     return (
       <div className="mb-3">
-        {pair && (
-          <p className="mb-2 rounded-xl border-2 border-amber bg-amber/15 p-3 text-sm">
-            Deux exercices existent pour la même école le même jour. Tu peux les fusionner.
-          </p>
-        )}
         <Button variant="secondary" className="flex w-full items-center justify-center gap-2" onClick={() => setOpen(true)}>
-          <Merge size={20} /> Fusionner deux exercices
+          <Merge size={20} /> Fusionner deux exercices à la main
         </Button>
         {msg && (
           <p className="mt-2 text-sm font-medium" role="status">
@@ -896,12 +1000,11 @@ function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] })
       </div>
     );
   }
-
   return (
     <div className="mb-4 flex flex-col gap-3 rounded-xl bg-bg p-3">
       <h3 className="font-bold">Fusionner deux exercices</h3>
       <label className="flex flex-col gap-1 text-sm font-medium">
-        A, l'exercice gardé
+        A, le maître (heures et organisation gardées)
         <select className="field" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
           <option value="">Choisir…</option>
           {list.map((e) => (
@@ -912,7 +1015,7 @@ function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] })
         </select>
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
-        B, versé dans A puis supprimé
+        B, ses saisies passent dans A, puis il est supprimé
         <select className="field" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
           <option value="">Choisir…</option>
           {list
@@ -924,52 +1027,13 @@ function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] })
             ))}
         </select>
       </label>
-
       {ready && preview === undefined && <Spinner />}
       {ready && preview && (
-        <div className="flex flex-col gap-2 text-sm" aria-label="Aperçu de la fusion">
-          {preview.target.exDate !== preview.source.exDate && (
-            <ErrorBox>Attention : les deux exercices n'ont pas la même date.</ErrorBox>
-          )}
-          <p>
-            <strong>A</strong> : {preview.target.people.join(", ") || "aucune saisie"} ({preview.target.photos} photo
-            {preview.target.photos > 1 ? "s" : ""})
-          </p>
-          <p>
-            <strong>B</strong> : {preview.source.people.join(", ") || "aucune saisie"} ({preview.source.photos} photo
-            {preview.source.photos > 1 ? "s" : ""})
-          </p>
-          {preview.sameDevice > 0 && (
-            <p>
-              {preview.sameDevice} téléphone{preview.sameDevice > 1 ? "s ont" : " a"} saisi dans les deux : réponses réunies (la plus récente par point).
-            </p>
-          )}
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="text-left text-muted">
-                <th className="py-1 pr-2 font-medium">Heure</th>
-                <th className="py-1 pr-2 font-medium">A</th>
-                <th className="py-1 pr-2 font-medium">B</th>
-                <th className="py-1 font-medium">Retenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {preview.times.map((t) => (
-                <tr key={t.field} className={`border-t border-line ${t.conflict ? "bg-amber/20" : ""}`}>
-                  <td className="py-1 pr-2">{TIME_NAMES[t.field]}</td>
-                  <td className="py-1 pr-2 tabular">{hhmm(t.target)}</td>
-                  <td className="py-1 pr-2 tabular">{hhmm(t.source)}</td>
-                  <td className="py-1 font-bold tabular">{hhmm(t.kept)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text-muted">
-            En cas d'écart : la plus tôt pour le début, l'alarme et le message d'évacuation, la plus tard pour les classes présentes, la
-            quittance et la fin. Tu pourras corriger ensuite.
-          </p>
-          {preview.filled.length > 0 && <p>Repris de B : {preview.filled.map((f) => FIELD_NAMES[f] ?? f).join(", ")}.</p>}
-          {preview.locked && <p>Un des deux était clôturé : le résultat le sera aussi.</p>}
+        <div className="flex flex-col gap-2" aria-label="Aperçu de la fusion">
+          {preview[0].exDate !== preview[1].exDate && <ErrorBox>Attention : les deux exercices n'ont pas la même date.</ErrorBox>}
+          {preview.map((m, i) => (
+            <MemberCard key={m._id} m={m} master={i === 0} name="manual-master" onPick={() => i === 1 && (setTargetId(sourceId), setSourceId(targetId))} />
+          ))}
         </div>
       )}
       {error && <ErrorBox>{error}</ErrorBox>}
@@ -977,11 +1041,12 @@ function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] })
         <Button
           disabled={!ready || !preview}
           onClick={async () => {
-            if (!window.confirm("Fusionner B dans A ? B sera supprimé, ses saisies et photos passent dans A.")) return;
+            if (!window.confirm("Verser B dans A ? B sera supprimé, ses saisies et photos passent dans A.")) return;
             setError(null);
             try {
-              const r = await merge({ token, targetId: targetId as Id<"exercises">, sourceId: sourceId as Id<"exercises"> });
-              setMsg(`Fusion faite : ${r.moved} saisie${r.moved > 1 ? "s" : ""} déplacée${r.moved > 1 ? "s" : ""}${r.combined ? `, ${r.combined} réunie${r.combined > 1 ? "s" : ""}` : ""}.`);
+              const r = await merge({ token, masterId: targetId as Id<"exercises">, sourceIds: [sourceId as Id<"exercises">] });
+              const n = r.moved + r.combined;
+              setMsg(`Fusion faite : ${n} saisie${n > 1 ? "s" : ""} regroupée${n > 1 ? "s" : ""}.`);
               setOpen(false);
               setSourceId("");
             } catch (e) {
@@ -996,5 +1061,126 @@ function MergeTool({ token, list }: { token: string; list: Doc<"exercises">[] })
         </Button>
       </div>
     </div>
+  );
+}
+
+/** One exercise in the admin list, with an inline correction form (organisation and times). */
+function ExerciseRow({ ex, token, children }: { ex: Doc<"exercises">; token: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="border-b border-line py-1 last:border-0">
+      <div className="flex min-h-12 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{ex.school}</p>
+          <p className="text-sm text-muted">
+            {fmtDateLong(ex.exDate)}
+            {ex.tEvac && ex.tPresent ? ` · évacuation ${duration(ex.tPresent - ex.tEvac)}` : ""}
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          <SmallBtn aria-label={`Corriger l'exercice ${ex.school}`} onClick={() => setOpen((o) => !o)}>
+            <Pencil size={18} /> Corriger
+          </SmallBtn>
+          {children}
+        </div>
+      </div>
+      {open && <CorrectForm ex={ex} token={token} onDone={() => setOpen(false)} />}
+    </li>
+  );
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const toInput = (ms?: number) => {
+  if (!ms) return "";
+  const d = new Date(ms);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+};
+const fromInput = (exDate: string, value: string): number | null => {
+  if (!value) return null;
+  const [y, mo, d] = exDate.split("-").map(Number);
+  const [h, mi, se = 0] = value.split(":").map(Number);
+  return new Date(y, mo - 1, d, h, mi, se).getTime();
+};
+
+function CorrectForm({ ex, token, onDone }: { ex: Doc<"exercises">; token: string; onDone: () => void }) {
+  const correct = useMutation(api.admin.correctExercise);
+  const [org, setOrg] = useState({
+    classroom: ex.classroom ?? "",
+    teacher: ex.teacher ?? "",
+    fireLocation: (ex.fireLocation ?? "") as "" | "classe" | "ailleurs",
+    fireDetail: ex.fireDetail ?? "",
+  });
+  const [times, setTimes] = useState<Record<string, string>>(Object.fromEntries(TIME_ORDER.map((k) => [k, toInput(ex[k])])));
+  const [error, setError] = useState<string | null>(null);
+  const evac = (() => {
+    const a = fromInput(ex.exDate, times.tEvac);
+    const b = fromInput(ex.exDate, times.tPresent);
+    return a !== null && b !== null ? duration(b - a) : "non mesurée";
+  })();
+
+  return (
+    <form
+      className="mb-2 mt-1 flex flex-col gap-2 rounded-xl bg-bg p-3"
+      aria-label={`Correction de ${ex.school}`}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          await correct({
+            token,
+            id: ex._id,
+            classroom: org.classroom,
+            teacher: org.teacher,
+            fireLocation: org.fireLocation || null,
+            fireDetail: org.fireDetail,
+            times: Object.fromEntries(TIME_ORDER.map((k) => [k, fromInput(ex.exDate, times[k])])),
+          });
+          onDone();
+        } catch (err) {
+          setError(errorMessage(err, "Correction impossible."));
+        }
+      }}
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex min-w-0 flex-col text-sm font-medium">
+          Classe
+          <input className="field" value={org.classroom} onChange={(e) => setOrg({ ...org, classroom: e.target.value })} />
+        </label>
+        <label className="flex min-w-0 flex-col text-sm font-medium">
+          Enseignant·e
+          <input className="field" value={org.teacher} onChange={(e) => setOrg({ ...org, teacher: e.target.value })} />
+        </label>
+      </div>
+      <label className="flex flex-col text-sm font-medium">
+        Sinistre fictif
+        <select className="field" value={org.fireLocation} onChange={(e) => setOrg({ ...org, fireLocation: e.target.value as typeof org.fireLocation })}>
+          <option value="">Non précisé</option>
+          <option value="classe">Dans la classe</option>
+          <option value="ailleurs">Ailleurs</option>
+        </select>
+      </label>
+      <label className="flex flex-col text-sm font-medium">
+        Précision du sinistre
+        <input className="field" value={org.fireDetail} onChange={(e) => setOrg({ ...org, fireDetail: e.target.value })} />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        {TIME_ORDER.map((k) => (
+          <label key={k} className="flex min-w-0 flex-col text-sm font-medium">
+            {TIME_NAMES[k]}
+            <input type="time" step={1} className="field tabular" value={times[k]} onChange={(e) => setTimes({ ...times, [k]: e.target.value })} />
+          </label>
+        ))}
+      </div>
+      <p className="text-sm">
+        Durée d'évacuation : <strong>{evac}</strong>
+      </p>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <div className="flex gap-2">
+        <Button type="submit">Enregistrer la correction</Button>
+        <Button variant="secondary" onClick={onDone}>
+          Annuler
+        </Button>
+      </div>
+    </form>
   );
 }

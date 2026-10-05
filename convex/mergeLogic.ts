@@ -1,5 +1,6 @@
-// Pure rules for merging two exercises created by mistake for the same school (half of the team in
-// each). Used by admin.mergeExercises and its preview; tested by Vitest.
+// Pure rules for merging exercises created by mistake for the same school on the same day (the team
+// split over several). One « master » gives every time and the organisation; the others only bring
+// their people's observations. Used by the admin merge functions; tested by Vitest.
 
 export const EARLIEST = ["tStart", "tAlarm", "tEvac"] as const; // first event wins
 export const LATEST = ["tPresent", "tFiremen", "tEnd"] as const; // never underestimate the evacuation time
@@ -109,4 +110,57 @@ export function mergeObservation<T extends ObsLike>(a: T, b: T): T {
     tClear: clears.length ? Math.max(...clears) : undefined,
     updatedAt: Math.max(a.updatedAt, b.updatedAt),
   };
+}
+
+export const TIME_KEYS = [...EARLIEST, ...LATEST];
+
+interface Candidate {
+  _id: string;
+  school: string;
+  exDate: string;
+  tStart?: number;
+  tAlarm?: number;
+  tEvac?: number;
+  tPresent?: number;
+  tFiremen?: number;
+  tEnd?: number;
+}
+
+export function timesCount(ex: Candidate): number {
+  return TIME_KEYS.filter((k) => ex[k] !== undefined).length;
+}
+
+export function evacuationMs(ex: Candidate): number | undefined {
+  return ex.tEvac !== undefined && ex.tPresent !== undefined ? ex.tPresent - ex.tEvac : undefined;
+}
+
+/**
+ * Master: the shortest measured evacuation (a late button press gives absurd durations such as
+ * 1 h 23); without any measured duration, the most recorded times; then the earliest start.
+ */
+export function pickMaster<T extends Candidate>(list: T[]): T {
+  return [...list].sort(
+    (a, b) =>
+      (evacuationMs(a) ?? Infinity) - (evacuationMs(b) ?? Infinity) ||
+      timesCount(b) - timesCount(a) ||
+      (a.tStart ?? Infinity) - (b.tStart ?? Infinity),
+  )[0];
+}
+
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/** Groups of exercises with the same school (case and accents ignored) on the same date. */
+export function duplicateGroups<T extends Candidate>(list: T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const ex of list) {
+    const key = `${ex.exDate}|${norm(ex.school)}`;
+    groups.set(key, [...(groups.get(key) ?? []), ex]);
+  }
+  return [...groups.values()].filter((g) => g.length > 1);
 }

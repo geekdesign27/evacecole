@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { loginAdmin } from "./helpers";
+import { ADMIN_PASSWORD, loginAdmin } from "./helpers";
 
 // Reproduces the field case: the team split over two exercises created for the same school.
 const CODE = process.env.E2E_TEAM_CODE ?? "test-moncor";
@@ -81,23 +81,44 @@ test("merge two exercises created for the same school", async ({ browser }) => {
   await second.getByRole("button", { name: "J'entends l'alarme évacuation" }).click();
   for (const p of [lead, rez, first, second]) await expect(p.getByRole("status")).toHaveText("Synchronisé", { timeout: 15_000 });
 
-  // Admin: the pair is detected and previewed
+  // Times as they ended up in the field: A is right (6 min 4 s), B was stamped far too late (1 h 23)
+  const { ConvexHttpClient } = await import("convex/browser");
+  const { api } = await import("../convex/_generated/api");
+  const { readFileSync } = await import("node:fs");
+  const url = readFileSync(".env.local", "utf8").match(/VITE_CONVEX_URL=(\S+)/)![1];
+  const client = new ConvexHttpClient(url);
+  const login = await client.mutation(api.admin.login, { user: "schutz.pa", password: ADMIN_PASSWORD });
+  if (!login.ok) throw new Error("admin login");
+  const day = new Date();
+  const at = (h: number, m: number, s = 0) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, s).getTime();
+  await client.mutation(api.admin.correctExercise, {
+    token: login.token,
+    id: a as never,
+    times: { tStart: at(9, 9), tAlarm: at(9, 12), tEvac: at(9, 12), tPresent: at(9, 18, 4), tFiremen: at(9, 19), tEnd: at(9, 19, 30) },
+  });
+  await client.mutation(api.admin.correctExercise, {
+    token: login.token,
+    id: b as never,
+    times: { tStart: at(9, 8), tAlarm: at(9, 9), tEvac: at(9, 10), tPresent: at(10, 33), tFiremen: at(10, 34), tEnd: at(10, 35) },
+  });
+
+  // Admin: the group is detected, A proposed as master (shortest evacuation), merged in one tap
   const admin = await phone(browser);
   await admin.goto(`./#/?k=${CODE}`);
   await loginAdmin(admin);
   await admin.goto("./#/admin");
-  await expect(admin.getByText("Deux exercices existent pour la même école le même jour.")).toBeVisible();
-  await admin.getByRole("button", { name: "Fusionner deux exercices" }).click();
-  await admin.getByLabel("A, l'exercice gardé").selectOption(a);
-  await admin.getByLabel("B, versé dans A puis supprimé").selectOption(b);
-  const preview = admin.getByLabel("Aperçu de la fusion");
-  await expect(preview).toContainText("Pierre-Alain Schütz (interpellateur), Cyril Egger (Rez)");
-  await expect(preview).toContainText("Joël Pochon (1er étage), Jean-Pierre Nussbaumer (2e étage) (1 photo)");
+  const dup = admin.getByLabel("Doublons à fusionner");
+  const group = dup.locator("div", { has: admin.getByText(school, { exact: false }) }).filter({ has: admin.getByRole("button", { name: "Fusionner ce groupe" }) }).last();
+  const masterCard = group.locator("label", { has: admin.getByRole("radio", { checked: true }) });
+  await expect(masterCard).toContainText("Maître : heures et organisation");
+  await expect(masterCard).toContainText("6 min 4 s");
+  await expect(masterCard).toContainText("Classe 6H B");
+  await expect(group).toContainText("1 h 23 min");
   admin.on("dialog", (d) => d.accept());
-  await admin.getByRole("button", { name: "Fusionner", exact: true }).click();
-  await expect(admin.getByText("Fusion faite : 2 saisies déplacées.")).toBeVisible();
+  await group.getByRole("button", { name: "Fusionner ce groupe" }).click();
+  await expect(admin.getByText(/Fusion faite : 1 exercice versé, 2 saisies regroupées/)).toBeVisible();
 
-  // B is gone, A's report holds the four people, the photo and the merged answers
+  // B is gone, A keeps its own times and organisation, and holds every person's input
   await admin.goto(`./#/x/${b}`);
   await expect(admin.getByText("Exercice introuvable.")).toBeVisible();
   await admin.goto(`./#/rapport/${a}`);
@@ -109,6 +130,18 @@ test("merge two exercises created for the same school", async ({ browser }) => {
   await expect(report).toContainText("Deux classes ont laissé la porte ouverte. (Joël Pochon, 1er étage)");
   await expect(report.getByRole("figure")).toHaveCount(1);
   await expect(report).toContainText("6H B");
+  await expect(report).toContainText("6 min 4 s");
+  await expect(report).toContainText("09h18");
+  await expect(report).not.toContainText("10h33");
+
+  // Admin correction of the organisation (e.g. the teacher's name)
+  await admin.goto("./#/admin");
+  await admin.getByRole("button", { name: `Corriger l'exercice ${school}` }).click();
+  const form = admin.getByRole("form", { name: `Correction de ${school}` });
+  await form.getByLabel("Enseignant·e").fill("Mme Schueler");
+  await form.getByRole("button", { name: "Enregistrer la correction" }).click();
+  await admin.goto(`./#/rapport/${a}`);
+  await expect(report).toContainText("Mme Schueler");
 
   // Clean up
   await admin.goto("./#/admin");

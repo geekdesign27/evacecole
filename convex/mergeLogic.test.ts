@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  fillEmpty,
-  mergeObservation,
-  mergeRecords,
-  mergeTimes,
-} from "./mergeLogic";
+import { duplicateGroups, fillEmpty, mergeObservation, mergeRecords, mergeTimes, pickMaster } from "./mergeLogic";
 
 describe("merge two exercises", () => {
   it("takes the only known time, the earliest start events and the latest end events", () => {
@@ -79,5 +74,28 @@ describe("merge two exercises", () => {
     expect(m.remarks).toBe("WC non vus. Rez calme.");
     expect(m.photos.map((p) => p.storageId)).toEqual(["p1", "p2"]);
     expect(m.tClear).toBe(10);
+  });
+
+  it("picks as master the shortest measured evacuation, then the most times", () => {
+    const min = 60_000;
+    const good = { _id: "good", school: "École de Platy", exDate: "2026-10-05", tStart: 0, tAlarm: 1, tEvac: 2, tPresent: 2 + 6 * min + 4000, tFiremen: 5, tEnd: 6 };
+    const late = { _id: "late", school: "École de Platy", exDate: "2026-10-05", tStart: 0, tAlarm: 1, tEvac: 2, tPresent: 2 + 83 * min, tFiremen: 5, tEnd: 6 };
+    const quarter = { _id: "quarter", school: "École de Platy", exDate: "2026-10-05", tEvac: 2, tPresent: 2 + 25 * min };
+    const noDuration = { _id: "none", school: "École de Platy", exDate: "2026-10-05", tStart: 0, tEvac: 2 };
+    expect(pickMaster([late, quarter, noDuration, good])._id).toBe("good");
+    // Platy: 6 times and 6 min 4 s against a start and an evacuation message only
+    expect(pickMaster([noDuration, good])._id).toBe("good");
+    // No measured duration anywhere: the most recorded times
+    expect(pickMaster([{ ...noDuration, _id: "two" }, { _id: "one", school: "x", exDate: "x", tStart: 0 }])._id).toBe("two");
+  });
+
+  it("groups the same school on the same day, ignoring case and accents", () => {
+    const g = duplicateGroups([
+      { _id: "a", school: "École de Platy", exDate: "2026-10-05" },
+      { _id: "b", school: "ecole de platy ", exDate: "2026-10-05" },
+      { _id: "c", school: "École de Platy", exDate: "2026-10-04" },
+      { _id: "d", school: "Rochettes", exDate: "2026-10-05" },
+    ]);
+    expect(g.map((x) => x.map((e) => e._id))).toEqual([["a", "b"]]);
   });
 });
