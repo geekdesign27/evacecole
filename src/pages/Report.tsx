@@ -19,6 +19,7 @@ import { downloadBlob, loadAssets } from "../export/assets";
 import { defaultReportMessageHtml } from "../../convex/mailTemplates";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 import { errorMessage } from "../lib/errors";
+import { useAdminToken } from "../lib/admin";
 
 
 /** Report of one school. */
@@ -28,7 +29,8 @@ export function SchoolReportPage() {
   const exId = id as Id<"exercises">;
   const ex = useQuery(api.exercises.get, { code, id: exId });
   const obs = useQuery(api.observations.byExercise, { code, exerciseId: exId });
-  const update = useMutation(api.exercises.update);
+  const adminToken = useAdminToken();
+  const updateReport = useMutation(api.admin.updateReport);
 
   if (ex === undefined || obs === undefined) return <Spinner />;
   if (ex === null) return <ErrorBox>Exercice introuvable.</ErrorBox>;
@@ -42,9 +44,8 @@ export function SchoolReportPage() {
       mode="school"
       storedFields={ex.report}
       label={ex.school}
-      onSave={(fields) =>
-        update({ code, id: ex._id, patch: { report: fields } })
-      }
+      adminToken={adminToken}
+      onSave={(fields) => (adminToken ? updateReport({ token: adminToken, id: ex._id, fields }) : Promise.resolve())}
     />
   );
 }
@@ -55,7 +56,8 @@ export function DayReportPage() {
   const { code } = useTeam();
   const list = useQuery(api.exercises.listRecent, { code });
   const stored = useQuery(api.exercises.dayReport, { code, exDate: date });
-  const updateDay = useMutation(api.exercises.updateDayReport);
+  const adminToken = useAdminToken();
+  const updateDay = useMutation(api.admin.updateDayReport);
   const dayExercises = useMemo(
     () => (list ?? []).filter((e) => e.exDate === date && !e.archived),
     [list, date],
@@ -111,7 +113,8 @@ export function DayReportPage() {
             mode={selected.length > 1 ? "day" : "school"}
             storedFields={stored}
             label={selected.length > 1 ? "Ecoles" : selected[0].school}
-            onSave={(fields) => updateDay({ code, exDate: date, fields })}
+            adminToken={adminToken}
+            onSave={(fields) => (adminToken ? updateDay({ token: adminToken, exDate: date, fields }) : Promise.resolve())}
           />
         )}
       </main>
@@ -128,6 +131,8 @@ interface EditorProps {
   label: string;
   onSave: (fields: Record<string, string>) => Promise<unknown>;
   embedded?: boolean;
+  /** Report texts are edited by the admin only. */
+  adminToken?: string;
 }
 
 function ReportEditor({
@@ -139,6 +144,7 @@ function ReportEditor({
   label,
   onSave,
   embedded,
+  adminToken,
 }: EditorProps) {
   const [fields, setFields] = useState<ReportFields>(() => ({
     author: device.author || device.name,
@@ -252,6 +258,7 @@ function ReportEditor({
       )}
 
       <ExportBar model={model} label={label} />
+      {adminToken && <LockCard token={adminToken} exercises={exercises} />}
       <SendReport
         model={model}
         label={label}
@@ -259,6 +266,7 @@ function ReportEditor({
         onMessage={(v) => edit("mailMessage", v)}
       />
 
+      {adminToken && (
       <Card className="no-print">
         <h2 className="mb-2 text-lg font-bold">Textes du rapport</h2>
         <div className="flex flex-col gap-3">
@@ -318,6 +326,7 @@ function ReportEditor({
           {saveError && <ErrorBox>{saveError}</ErrorBox>}
         </div>
       </Card>
+      )}
 
       <Preview model={model} />
     </div>
@@ -363,6 +372,41 @@ function Field({
         />
       )}
     </div>
+  );
+}
+
+/** Closing the team's input: answers become read-only (also done automatically when the report is sent). */
+function LockCard({ token, exercises }: { token: string; exercises: Doc<"exercises">[] }) {
+  const setLocked = useMutation(api.admin.setLocked);
+  const [error, setError] = useState<string | null>(null);
+  const lockedCount = exercises.filter((e) => e.locked).length;
+  const allLocked = lockedCount === exercises.length;
+  const ids = exercises.map((e) => e._id);
+  return (
+    <Card className="no-print">
+      <h2 className="mb-1 text-lg font-bold">Saisie des équipes</h2>
+      <p className="mb-2 text-sm">
+        {allLocked
+          ? "Clôturée : les réponses, commentaires et heures ne peuvent plus être modifiés."
+          : lockedCount > 0
+            ? `Clôturée pour ${lockedCount} exercice${lockedCount > 1 ? "s" : ""} sur ${exercises.length}.`
+            : "Ouverte : les équipes peuvent encore corriger leurs réponses. Elle se clôture automatiquement à l'envoi du rapport."}
+      </p>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <Button
+        variant={allLocked ? "secondary" : "dark"}
+        onClick={async () => {
+          setError(null);
+          try {
+            await setLocked({ token, ids, locked: !allLocked });
+          } catch (e) {
+            setError(errorMessage(e, "Modification impossible."));
+          }
+        }}
+      >
+        {allLocked ? "Rouvrir la saisie" : "Clôturer la saisie maintenant"}
+      </Button>
+    </Card>
   );
 }
 
@@ -441,12 +485,13 @@ function SendReport({
         exDate: model.exDate,
         message: parseRich(shownMessage),
         files,
+        exerciseIds: model.schools.map((x) => x.exerciseId as Id<"exercises">),
       });
       const parts = [];
       if (r.sent) parts.push(`${r.sent} envoyé${r.sent > 1 ? "s" : ""}`);
       if (r.simulated) parts.push(`${r.simulated} simulé${r.simulated > 1 ? "s" : ""}`);
       if (r.errors) parts.push(`${r.errors} en erreur (voir le journal dans Gestion)`);
-      setResult(parts.join(", "));
+      setResult(`${parts.join(", ")}. La saisie des exercices du rapport est maintenant clôturée.`);
     } catch (e) {
       setError(errorMessage(e, "Envoi impossible."));
     } finally {

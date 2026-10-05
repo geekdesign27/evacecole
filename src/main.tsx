@@ -13,6 +13,7 @@ import { ExercisePage } from "./pages/Exercise";
 import { DayReportPage, SchoolReportPage } from "./pages/Report";
 import { PaperSheet } from "./pages/PaperSheet";
 import { AdminPage } from "./pages/Admin";
+import { MySubmissions } from "./pages/MySubmissions";
 
 function App() {
   if (!convexConfigured) {
@@ -39,6 +40,7 @@ function App() {
                     <Route path="/x/:id" element={<ExercisePage />} />
                     <Route path="/rapport/jour/:date" element={<DayReportPage />} />
                     <Route path="/rapport/:id" element={<SchoolReportPage />} />
+                    <Route path="/mes-saisies" element={<MySubmissions />} />
                     <Route path="*" element={<Home />} />
                   </Routes>
                 </TeamGate>

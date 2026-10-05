@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import { loginAdmin } from "./helpers";
 import { expect, test } from "@playwright/test";
 
 // Accessibility of the live exercise screen (Lighthouse cannot reach it: it needs a joined device).
@@ -24,6 +25,7 @@ test("exercise screen has no accessibility violations", async ({ page }) => {
   }
 
   // Synthesis page with the rich text editors
+  await loginAdmin(page);
   await page.getByRole("link", { name: "Synthèse" }).click();
   await expect(page.getByRole("toolbar", { name: "Mise en forme : Recommandations" })).toBeVisible();
   const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();

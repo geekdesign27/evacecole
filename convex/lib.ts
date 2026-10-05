@@ -34,6 +34,11 @@ export async function assertTeam(ctx: QueryCtx, code: string) {
   if (!(await isValidCode(ctx, code))) throw new ConvexError("Code d'équipe incorrect ou révoqué.");
 }
 
+/** Refuses any change by the team once the exercise is closed. */
+export function assertOpen(ex: { locked?: boolean }) {
+  if (ex.locked) throw new ConvexError("Saisie clôturée : cet exercice ne peut plus être modifié.");
+}
+
 /** Admin functions take the session token returned by admin.login. */
 export async function assertAdmin(ctx: QueryCtx, token: string) {
   const session = token

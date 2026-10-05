@@ -49,7 +49,8 @@ export function useOnline(): boolean {
   return online;
 }
 
-export function useObservationDraft(exerciseId: Id<"exercises">, code: string) {
+/** `paused` (closed exercise) stops sending: the server would refuse it anyway. */
+export function useObservationDraft(exerciseId: Id<"exercises">, code: string, paused = false) {
   const upsert = useMutation(api.observations.upsert);
   const online = useOnline();
   const [draft, setDraftState] = useState<Draft | null>(() =>
@@ -94,7 +95,7 @@ export function useObservationDraft(exerciseId: Id<"exercises">, code: string) {
 
   const push = useCallback(async () => {
     const d = latest.current;
-    if (!d || inflight.current || !code) return;
+    if (!d || inflight.current || !code || paused) return;
     if (d.syncedAt !== undefined && d.syncedAt >= d.updatedAt) return;
     inflight.current = true;
     try {
@@ -115,7 +116,7 @@ export function useObservationDraft(exerciseId: Id<"exercises">, code: string) {
       void push();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, upsert]);
+  }, [code, upsert, paused]);
 
   useEffect(() => {
     void push();

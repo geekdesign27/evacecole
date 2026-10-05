@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, QrCode } from "lucide-react";
+import { FileText, Lock, QrCode } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
@@ -13,6 +13,7 @@ import { device } from "../lib/storage";
 import { useObservationDraft, useStamps, type Draft } from "../lib/sync";
 import { useTeam } from "../lib/team";
 import { Checklist } from "../components/Checklist";
+import { AppMenu } from "../components/AppMenu";
 import { PhotoButton, Thumbs } from "../components/Photos";
 import { Stopwatch } from "../components/Stopwatch";
 import { Timeline } from "../components/Timeline";
@@ -34,6 +35,7 @@ export function ExercisePage() {
   const { draft, setDraft, join, status, error } = useObservationDraft(
     exerciseId,
     code,
+    !!ex?.locked,
   );
 
   if (ex === undefined) return <Spinner />;
@@ -47,6 +49,24 @@ export function ExercisePage() {
       </main>
     );
 
+  if (!draft?.observer && ex.locked) {
+    return (
+      <>
+        <TopBar title={ex.school} back="/" />
+        <main className="mx-auto flex max-w-xl flex-col gap-4 p-4">
+          <Card>
+            <h2 className="mb-2 flex items-center gap-2 text-xl font-bold">
+              <Lock size={22} /> Saisie clôturée
+            </h2>
+            <p>Le rapport de cet exercice a été établi, il n'est plus possible de le rejoindre.</p>
+            <Link to={`/rapport/${ex._id}`} className="mt-3 flex min-h-12 items-center font-medium text-brand underline">
+              Voir la synthèse
+            </Link>
+          </Card>
+        </main>
+      </>
+    );
+  }
   if (!draft?.observer) return <JoinForm ex={ex} onJoin={join} />;
 
   return (
@@ -249,6 +269,7 @@ function ExerciseScreen({
             {ex.school}
           </p>
           <SyncDot status={status} title={error ?? undefined} />
+          <AppMenu />
         </div>
         <div className="px-3 pb-3">
           <Stopwatch {...shownTimes} />
@@ -256,9 +277,28 @@ function ExerciseScreen({
       </div>
 
       <main className="mx-auto flex max-w-2xl flex-col gap-4 p-3 pb-28">
-        {status === "error" && error && (
-          <ErrorBox>Synchronisation refusée : {error}</ErrorBox>
+        {ex.locked ? (
+          <div className="flex items-start gap-3 rounded-xl border-2 border-ink bg-white p-3" role="status">
+            <Lock size={22} className="mt-0.5 shrink-0" />
+            <div>
+              <p className="font-bold">Saisie clôturée</p>
+              <p className="text-sm">
+                Le rapport a été établi : vos réponses restent consultables mais ne peuvent plus être modifiées. Pour une correction,
+                contactez le chef d'exercice.
+              </p>
+              {status === "pending" && (
+                <p className="mt-1 text-sm font-medium text-brand-dark">
+                  Des modifications faites sur ce téléphone n'ont pas pu être envoyées avant la clôture.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          status === "error" && error && <ErrorBox>Synchronisation refusée : {error}</ErrorBox>
         )}
+
+        {/* A closed exercise: every control below is disabled at once (the server refuses changes too). */}
+        <fieldset disabled={!!ex.locked} className="contents">
 
         <div className="flex items-center justify-between gap-2 text-sm">
           <p>
@@ -382,6 +422,8 @@ function ExerciseScreen({
             />
           </div>
         </Card>
+
+        </fieldset>
 
         <TeamCard team={team} />
 

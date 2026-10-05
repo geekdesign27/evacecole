@@ -32,6 +32,9 @@ export default defineSchema({
     timingNotes: v.record(v.string(), v.string()),
     report: v.record(v.string(), v.string()), // editable report fields
     archived: v.boolean(),
+    // Closed after the report is sent: answers become read-only for the team.
+    locked: v.optional(v.boolean()),
+    lockedAt: v.optional(v.number()),
   }).index("by_date", ["exDate"]),
 
   observations: defineTable({

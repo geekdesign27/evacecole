@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import { AppMenu } from "./AppMenu";
 import type { SyncStatus } from "../lib/sync";
 
 type Variant = "primary" | "secondary" | "ghost" | "dark";
@@ -75,6 +76,7 @@ export function TopBar({
       )}
       <h1 className="flex-1 truncate text-lg font-bold">{title}</h1>
       {right}
+      <AppMenu />
     </header>
   );
 }

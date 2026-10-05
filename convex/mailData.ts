@@ -43,6 +43,13 @@ export const log = internalMutation({
   },
 });
 
+export const lockExercises = internalMutation({
+  args: { ids: v.array(v.id("exercises")) },
+  handler: async (ctx, { ids }) => {
+    for (const id of ids) if (await ctx.db.get(id)) await ctx.db.patch(id, { locked: true, lockedAt: Date.now() });
+  },
+});
+
 export const deleteFiles = internalMutation({
   args: { ids: v.array(v.id("_storage")) },
   handler: async (ctx, { ids }) => {

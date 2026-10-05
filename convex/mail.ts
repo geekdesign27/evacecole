@@ -93,8 +93,10 @@ export const sendReport = action({
     exDate: v.string(),
     message: v.array(v.any()), // whitelisted rich blocks, escaped by the template
     files: v.array(v.object({ storageId: v.id("_storage"), filename: v.string(), contentType: v.string() })),
+    // Exercises in the report: their input is closed once the report has gone out.
+    exerciseIds: v.optional(v.array(v.id("exercises"))),
   },
-  handler: async (ctx, { token, recipients, title, exDate, message, files }) => {
+  handler: async (ctx, { token, recipients, title, exDate, message, files, exerciseIds }) => {
     if (!(await ctx.runQuery(internal.mailData.isAdmin, { token }))) throw new ConvexError("Session expirée, reconnecte-toi.");
     const to = [...new Set(recipients.map((r) => r.trim().toLowerCase()).filter(Boolean))];
     const invalid = to.filter((r) => !EMAIL.test(r));
@@ -143,6 +145,9 @@ export const sendReport = action({
       }
     }
     await ctx.runMutation(internal.mailData.deleteFiles, { ids: files.map((f) => f.storageId) });
+    if (exerciseIds?.length && results.sent + results.simulated > 0) {
+      await ctx.runMutation(internal.mailData.lockExercises, { ids: exerciseIds });
+    }
     return results;
   },
 });

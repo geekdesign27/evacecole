@@ -21,6 +21,16 @@ et n'est jamais écrit dans le dépôt.
   variables d'environnement Convex. Session de 7 jours, après 5 échecs, les essais faux sont refusés 10 min, mais le bon mot de passe passe toujours (pas de blocage de l'admin par un tiers) : la protection repose sur un ADMIN_PASSWORD long.
 - Mot de passe admin du déploiement **dev** pour les tests : `test-admin-dev-2026` (jamais en production).
 
+## Clôture et droits
+
+- **Clôture** (`exercises.locked`) : posée automatiquement à l'envoi du rapport par courriel (exercices du rapport),
+  ou à la main dans la Synthèse (carte « Saisie des équipes », admin). Une fois clôturé, le serveur refuse
+  `observations.upsert`, `exercises.stamp`, `exercises.setTime` et `exercises.update` (`assertOpen`). L'écran de saisie
+  passe en lecture seule (`<fieldset disabled>`), le brouillon local n'est plus envoyé.
+- **Textes du rapport** : modifiables par l'admin seulement (`admin.updateReport`, `admin.updateDayReport`). Les autres
+  voient l'aperçu et peuvent télécharger PDF et Word.
+- **Menu** ☰ sur tous les écrans : Accueil, Mes saisies (brouillons de l'appareil), Fiche papier, Gestion (admin seulement).
+
 ## Tests
 
 - `npm test` : Vitest (`buildReport`, formats, contrat de la grille).

@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
+import { loginAdmin } from "./helpers";
 import { mkdirSync } from "node:fs";
 import { fmtDateLong, todayIso } from "../src/domain/format";
 
@@ -210,6 +211,8 @@ test("seed a fake morning of 4 schools and export the day report", async ({ brow
   await writer.getByRole("link", { name: "Rapport de la journée" }).click();
   const preview = writer.getByRole("article", { name: "Aperçu du rapport" });
   for (const s of SCHOOLS) await expect(preview).toContainText(s.name);
+  await loginAdmin(writer);
+  await writer.reload();
   await writer.getByLabel("Rédigé par").fill("Plt Pierre-Alain Schütz");
   await writer.getByRole("button", { name: /Insérer les suggestions/ }).click();
   for (const [button, ext] of [["Télécharger PDF", "pdf"], ["Télécharger Word", "docx"]] as const) {

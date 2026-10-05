@@ -327,3 +327,41 @@ export const deleteExercise = mutation({
     await ctx.db.delete(id);
   },
 });
+
+// Report texts and closing (admin only)
+
+const reportFields = v.record(v.string(), v.string());
+
+export const updateReport = mutation({
+  args: { token: v.string(), id: v.id("exercises"), fields: reportFields },
+  handler: async (ctx, { token, id, fields }) => {
+    await assertAdmin(ctx, token);
+    const ex = await ctx.db.get(id);
+    if (!ex) throw new ConvexError("Exercice introuvable.");
+    await ctx.db.patch(id, { report: { ...ex.report, ...fields } });
+  },
+});
+
+export const updateDayReport = mutation({
+  args: { token: v.string(), exDate: v.string(), fields: reportFields },
+  handler: async (ctx, { token, exDate, fields }) => {
+    await assertAdmin(ctx, token);
+    const doc = await ctx.db
+      .query("dayReports")
+      .withIndex("by_date", (q) => q.eq("exDate", exDate))
+      .first();
+    if (doc) await ctx.db.patch(doc._id, { fields: { ...doc.fields, ...fields } });
+    else await ctx.db.insert("dayReports", { exDate, fields });
+  },
+});
+
+/** Closes (or reopens) the team's input on these exercises. */
+export const setLocked = mutation({
+  args: { token: v.string(), ids: v.array(v.id("exercises")), locked: v.boolean() },
+  handler: async (ctx, { token, ids, locked }) => {
+    await assertAdmin(ctx, token);
+    for (const id of ids) {
+      await ctx.db.patch(id, locked ? { locked: true, lockedAt: Date.now() } : { locked: false, lockedAt: undefined });
+    }
+  },
+});

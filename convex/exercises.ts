@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { assertTeam } from "./lib";
+import { assertOpen, assertTeam } from "./lib";
 
 const timeField = v.union(
   v.literal("tStart"),
@@ -42,6 +42,7 @@ export const stamp = mutation({
     await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
+    assertOpen(ex);
     if (ex[field] !== undefined) return ex[field]; // first tap wins
     const now = Date.now();
     const t = clientTs !== undefined && now - clientTs > LATE_DELIVERY_MS && clientTs < now ? clientTs : now;
@@ -64,6 +65,7 @@ export const setTime = mutation({
     await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
+    assertOpen(ex);
     const patch: Record<string, unknown> = value === undefined ? {} : { [field]: value ?? undefined };
     if (note !== undefined) {
       const timingNotes = { ...ex.timingNotes };
@@ -92,15 +94,14 @@ export const update = mutation({
       fireLocation: v.optional(v.union(v.literal("classe"), v.literal("ailleurs"))),
       fireDetail: v.optional(v.string()),
       leadName: v.optional(v.string()),
-      report: v.optional(v.record(v.string(), v.string())),
     }),
   },
   handler: async (ctx, { code, id, patch }) => {
     await assertTeam(ctx, code);
     const ex = await ctx.db.get(id);
     if (!ex) throw new ConvexError("Exercice introuvable.");
-    const { report, ...rest } = patch;
-    await ctx.db.patch(id, { ...rest, ...(report ? { report: { ...ex.report, ...report } } : {}) });
+    assertOpen(ex);
+    await ctx.db.patch(id, patch);
   },
 });
 
@@ -155,18 +156,5 @@ export const dayReport = query({
       .withIndex("by_date", (q) => q.eq("exDate", exDate))
       .first();
     return doc?.fields ?? {};
-  },
-});
-
-export const updateDayReport = mutation({
-  args: { code: v.string(), exDate: v.string(), fields: v.record(v.string(), v.string()) },
-  handler: async (ctx, { code, exDate, fields }) => {
-    await assertTeam(ctx, code);
-    const doc = await ctx.db
-      .query("dayReports")
-      .withIndex("by_date", (q) => q.eq("exDate", exDate))
-      .first();
-    if (doc) await ctx.db.patch(doc._id, { fields: { ...doc.fields, ...fields } });
-    else await ctx.db.insert("dayReports", { exDate, fields });
   },
 });

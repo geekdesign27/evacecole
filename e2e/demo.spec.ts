@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { loginAdmin } from "./helpers";
 import { mkdirSync } from "node:fs";
 
 // Demo report with realistic fake data. Run on demand: DEMO=1 npx playwright test e2e/demo.spec.ts
@@ -140,6 +141,7 @@ test("demo report", async ({ browser }) => {
   await expect(lead.getByText(/^\d{2}:\d{2}:\d{2}$/)).toHaveCount(6, { timeout: 10_000 });
   for (const p of [lead, ...obs]) await expect(p.getByRole("status")).toHaveText("Synchronisé", { timeout: 10_000 });
 
+  await loginAdmin(lead);
   await lead.getByRole("link", { name: "Synthèse" }).click();
   await lead.getByLabel("Rédigé par").fill("Plt Pierre-Alain Schütz");
   // Formatted recommendations: a bold lead-in, then a bullet list, then the suggestions

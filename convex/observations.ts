@@ -1,7 +1,7 @@
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { assertTeam } from "./lib";
+import { assertOpen, assertTeam } from "./lib";
 import { answerValue, photo } from "./schema";
 
 export const upsert = mutation({
@@ -20,7 +20,9 @@ export const upsert = mutation({
   },
   handler: async (ctx, { code, ...obs }) => {
     await assertTeam(ctx, code);
-    if (!(await ctx.db.get(obs.exerciseId))) throw new ConvexError("Cet exercice a été supprimé.");
+    const ex = await ctx.db.get(obs.exerciseId);
+    if (!ex) throw new ConvexError("Cet exercice a été supprimé.");
+    assertOpen(ex);
     const existing = await ctx.db
       .query("observations")
       .withIndex("by_client", (q) => q.eq("clientId", obs.clientId).eq("exerciseId", obs.exerciseId))

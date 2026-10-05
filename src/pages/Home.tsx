@@ -214,8 +214,8 @@ export function Home() {
           <Link to="/fiche" className="flex min-h-12 items-center justify-center font-medium underline">
             Fiche papier
           </Link>
-          <Link to="/admin" className="flex min-h-12 items-center justify-center font-medium underline">
-            Gestion
+          <Link to="/mes-saisies" className="flex min-h-12 items-center justify-center font-medium underline">
+            Mes saisies
           </Link>
         </div>
         <Button variant="ghost" onClick={() => setShowArchived((v) => !v)}>

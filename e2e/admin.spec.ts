@@ -114,6 +114,16 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   // alice@, bruno@ and direction@ (duplicates of earlier runs are sent once)
   await admin.getByRole("button", { name: "Envoyer le rapport (3 destinataires)" }).click();
   await expect(admin.getByText("3 simulés")).toBeVisible({ timeout: 60_000 });
+
+  // Sending the report closes the input: the participant's phone becomes read-only
+  await expect(phone.getByText("Saisie clôturée")).toBeVisible({ timeout: 10_000 });
+  const firstRadio = phone.getByRole("radio", { name: "Oui", exact: true }).first();
+  await expect(firstRadio).toBeDisabled();
+  await expect(admin.getByText(/Clôturée : les réponses/)).toBeVisible();
+  // Reopening makes it editable again
+  await admin.getByRole("button", { name: "Rouvrir la saisie" }).click();
+  await expect(phone.getByText("Saisie clôturée")).toHaveCount(0, { timeout: 10_000 });
+  await expect(firstRadio).toBeEnabled();
   await admin.goto("./#/admin");
   await expect(journal.getByText("direction@example.ch").first()).toBeVisible();
   await expect(journal.locator("li", { hasText: "direction@example.ch" }).first()).toContainText("1 pièce jointe");

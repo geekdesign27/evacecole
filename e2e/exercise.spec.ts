@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { loginAdmin } from "./helpers";
 import { mkdirSync } from "node:fs";
 
 // Local test team code, set on the anonymous local Convex deployment (see docs/DEV.md).
@@ -118,7 +119,14 @@ test("full exercise with three phones, offline safety and both exports", async (
   await obs1.getByRole("button", { name: "Ma zone est évacuée" }).click();
 
   // Synthesis
+  // A team member sees the preview but cannot edit the report texts
   await lead.getByRole("link", { name: "Synthèse" }).click();
+  await expect(lead.getByRole("article", { name: "Aperçu du rapport" })).toBeVisible();
+  await expect(lead.getByRole("heading", { name: "Textes du rapport" })).toHaveCount(0);
+  // The admin can
+  await loginAdmin(lead);
+  await lead.reload();
+  await expect(lead.getByRole("heading", { name: "Textes du rapport" })).toBeVisible();
   const preview = lead.getByRole("article", { name: "Aperçu du rapport" });
   await expect(preview).toContainText(`Rapport d'exercice d'évacuation : ${school}`);
   // Once in the evaluation criteria, once in the school section
