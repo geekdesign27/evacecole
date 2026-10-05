@@ -20,6 +20,7 @@ import { defaultReportMessageHtml } from "../../convex/mailTemplates";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 import { useAdminToken } from "../lib/admin";
+import { fixLegacyFields } from "../domain/legacy";
 
 
 /** Report of one school. */
@@ -148,7 +149,7 @@ function ReportEditor({
 }: EditorProps) {
   const [fields, setFields] = useState<ReportFields>(() => ({
     author: device.author || device.name,
-    ...storedFields,
+    ...fixLegacyFields(storedFields),
   }));
   const [saveError, setSaveError] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -200,7 +201,7 @@ function ReportEditor({
   useEffect(() => {
     setFields((f) => {
       const next = { ...f };
-      for (const [k, val] of Object.entries(storedFields)) {
+      for (const [k, val] of Object.entries(fixLegacyFields(storedFields))) {
         if (!(k in pending.current)) next[k as keyof ReportFields] = val;
       }
       return next;

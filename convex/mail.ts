@@ -7,6 +7,7 @@ import { ConvexError, v } from "convex/values";
 import nodemailer from "nodemailer";
 import type { Id } from "./_generated/dataModel";
 import { inviteMail, reportMail, type Mail, type MailBlock } from "./mailTemplates";
+import { fixLegacyName } from "../src/domain/legacy";
 
 const appUrl = () => process.env.APP_URL ?? "https://geekdesign27.github.io/evacecole/";
 const fromAddress = () => process.env.GMAIL_USER ?? "schutz.pa@gmail.com";
@@ -113,7 +114,12 @@ export const sendReport = action({
     const mail = reportMail({
       title,
       dateLong: fmtDateLong(exDate),
-      message: message as MailBlock[],
+      // Texts saved before the « CP Moncor » rename are fixed here too.
+      message: (message as MailBlock[]).map((b) =>
+        "runs" in b
+          ? { ...b, runs: b.runs.map((r) => ({ ...r, text: fixLegacyName(String(r.text ?? "")) })) }
+          : { ...b, items: b.items.map((it) => it.map((r) => ({ ...r, text: fixLegacyName(String(r.text ?? "")) }))) },
+      ) as MailBlock[],
       attachments: files.map((f) => f.filename),
       appUrl: appUrl(),
     });
