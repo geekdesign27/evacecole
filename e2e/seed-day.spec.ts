@@ -155,6 +155,7 @@ test("seed a fake morning of 4 schools and export the day report", async ({ brow
     await lead.goto(`./#/?k=${CODE}`);
     await expect(lead.getByText("Nouvel exercice")).toBeVisible();
     const picker = lead.getByLabel("École", { exact: true });
+    await expect(picker.or(lead.getByLabel("Nom de l'école"))).toBeVisible();
     const exists = (await picker.isVisible()) && (await picker.locator("option", { hasText: school.name }).count()) > 0;
     if (exists) await picker.selectOption({ label: school.name });
     else {

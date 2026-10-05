@@ -12,6 +12,9 @@ import type * as admin from "../admin.js";
 import type * as exercises from "../exercises.js";
 import type * as files from "../files.js";
 import type * as lib from "../lib.js";
+import type * as mail from "../mail.js";
+import type * as mailData from "../mailData.js";
+import type * as mailTemplates from "../mailTemplates.js";
 import type * as observations from "../observations.js";
 import type * as team from "../team.js";
 
@@ -26,6 +29,9 @@ declare const fullApi: ApiFromModules<{
   exercises: typeof exercises;
   files: typeof files;
   lib: typeof lib;
+  mail: typeof mail;
+  mailData: typeof mailData;
+  mailTemplates: typeof mailTemplates;
   observations: typeof observations;
   team: typeof team;
 }>;

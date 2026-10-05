@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -23,12 +23,6 @@ export function inviteLink(code: string, name?: string) {
   return `${window.location.origin}${window.location.pathname}#/?k=${encodeURIComponent(code)}${n}`;
 }
 
-/** Opens the admin's own mail app with a ready-to-send message (no mail service needed). */
-function mailto(to: string[], subject: string, body: string, bcc = false) {
-  const list = to.map(encodeURIComponent).join(",");
-  const q = `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  return bcc ? `mailto:?bcc=${list}&${q}` : `mailto:${list}?${q}`;
-}
 
 /** Newest code still usable (today or later, not revoked): used for invitations. */
 function useInviteCode(token: string) {
@@ -36,20 +30,6 @@ function useInviteCode(token: string) {
   return codes?.find((c) => !c.revoked && !c.expired) ?? null;
 }
 
-function inviteBody(link: string, code: string, date: string, firstName?: string) {
-  return [
-    firstName ? `Bonjour ${firstName},` : "Bonjour,",
-    "",
-    `Voici l'accès à l'application des exercices d'évacuation pour le ${fmtDateLong(date)}.`,
-    "",
-    "Ouvre ce lien sur ton téléphone, il te connecte directement :",
-    link,
-    "",
-    `Si le lien ne marche pas, le code du jour est : ${code}`,
-    "",
-    "Compagnie des sapeurs-pompiers Moncor",
-  ].join("\n");
-}
 
 export function AdminPage() {
   const [token, setToken] = useState(() => readJSON<string>(TOKEN_KEY, ""));
@@ -92,6 +72,7 @@ export function AdminPage() {
         <Participants token={token} />
         <Schools token={token} />
         <Exercises token={token} />
+        <MailJournal token={token} />
       </main>
     </>
   );
@@ -329,74 +310,189 @@ function parseParticipants(text: string) {
     }));
 }
 
-function PersonInvite({
-  code,
-  date,
-  firstName,
-  name,
-  email,
-}: {
-  code: string;
-  date: string;
-  firstName: string;
-  name: string;
-  email?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-  const link = inviteLink(code, name);
-  return (
-    <div className="mt-1 flex flex-wrap gap-x-4">
-      {email && (
-        <a
-          className="flex min-h-12 items-center font-medium text-brand underline"
-          href={mailto([email], "Exercice d'évacuation : ton accès", inviteBody(link, code, date, firstName))}
-        >
-          Envoyer par courriel
-        </a>
-      )}
-      <button
-        type="button"
-        className="min-h-12 font-medium underline"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(link);
-            setCopied(true);
-          } catch {
-            setCopied(false);
-          }
-        }}
-      >
-        {copied ? "Lien copié" : "Copier son lien"}
-      </button>
-    </div>
+function MailMode({ token }: { token: string }) {
+  const mode = useQuery(api.mailData.mailMode, { token });
+  if (!mode) return null;
+  return mode.simulated ? (
+    <p className="mb-3 rounded-xl border-2 border-amber bg-amber/15 p-3 text-sm">
+      <strong>Mode simulation :</strong> aucun courriel ne part réellement, ils apparaissent seulement dans le journal. Envoi réel dès que
+      GMAIL_APP_PASSWORD est configuré dans Convex.
+    </p>
+  ) : (
+    <p className="mb-3 text-sm text-muted">Envoi depuis {mode.from}.</p>
   );
 }
+
+function resultText(r: { sent: number; simulated: number; errors: number }) {
+  const parts = [];
+  if (r.sent) parts.push(`${r.sent} envoyé${r.sent > 1 ? "s" : ""}`);
+  if (r.simulated) parts.push(`${r.simulated} simulé${r.simulated > 1 ? "s" : ""}`);
+  if (r.errors) parts.push(`${r.errors} en erreur (voir le journal)`);
+  return parts.join(", ") || "Aucun destinataire avec une adresse.";
+}
+
+type Participant = {
+  _id: Id<"participants">;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  fonction?: string;
+  active: boolean;
+};
+
+function ParticipantRow({ p, token, invite }: { p: Participant; token: string; invite: { _id: Id<"accessCodes">; code: string } | null }) {
+  const update = useMutation(api.admin.updateParticipant);
+  const remove = useMutation(api.admin.removeParticipant);
+  const sendInvites = useAction(api.mail.sendInvites);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ firstName: p.firstName, lastName: p.lastName, email: p.email ?? "", fonction: p.fonction ?? "" });
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const name = `${p.firstName} ${p.lastName}`.trim();
+
+  if (editing) {
+    return (
+      <li className="border-b border-line py-3 last:border-0">
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setError(null);
+            try {
+              await update({
+                token,
+                id: p._id,
+                firstName: form.firstName,
+                lastName: form.lastName,
+                email: form.email || undefined,
+                fonction: form.fonction || undefined,
+                active: p.active,
+              });
+              setEditing(false);
+            } catch (err) {
+              setError(errorMessage(err, "Enregistrement impossible."));
+            }
+          }}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <input className="field" aria-label="Prénom" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+            <input className="field" aria-label="Nom" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+          </div>
+          <input className="field" type="email" aria-label="Courriel" placeholder="Courriel" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input className="field" aria-label="Fonction" placeholder="Fonction" value={form.fonction} onChange={(e) => setForm({ ...form, fonction: e.target.value })} />
+          {error && <ErrorBox>{error}</ErrorBox>}
+          <div className="flex gap-2">
+            <Button type="submit">Enregistrer</Button>
+            <Button variant="secondary" onClick={() => setEditing(false)}>
+              Annuler
+            </Button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-start justify-between gap-2 border-b border-line py-2 last:border-0">
+      <div className="min-w-0">
+        <p className={`truncate font-medium ${p.active ? "" : "text-muted line-through"}`}>{name}</p>
+        <p className="truncate text-sm text-muted">{[p.fonction, p.email].filter(Boolean).join(" · ") || "Pas de courriel"}</p>
+        <div className="flex flex-wrap gap-x-4">
+          <button type="button" className="min-h-12 font-medium underline" onClick={() => setEditing(true)} aria-label={`Modifier ${name}`}>
+            Modifier
+          </button>
+          {invite && p.active && p.email && (
+            <button
+              type="button"
+              disabled={busy}
+              className="min-h-12 font-medium text-brand underline disabled:opacity-50"
+              onClick={async () => {
+                setBusy(true);
+                setMsg(null);
+                try {
+                  setMsg(resultText(await sendInvites({ token, codeId: invite._id, participantIds: [p._id] })));
+                } catch (err) {
+                  setMsg(errorMessage(err, "Envoi impossible."));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? "Envoi…" : "Envoyer son invitation"}
+            </button>
+          )}
+          {invite && p.active && <CopyLink link={inviteLink(invite.code, name)} />}
+        </div>
+        {msg && (
+          <p className="text-sm" role="status">
+            {msg}
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 gap-1">
+        <Chip
+          active={p.active}
+          onClick={() =>
+            void update({ token, id: p._id, firstName: p.firstName, lastName: p.lastName, email: p.email, fonction: p.fonction, active: !p.active })
+          }
+        >
+          {p.active ? "Actif" : "Inactif"}
+        </Chip>
+        <button
+          type="button"
+          className="min-h-12 min-w-12 rounded-xl text-xl"
+          aria-label={`Supprimer ${name}`}
+          onClick={() => {
+            if (window.confirm(`Supprimer ${name} ?`)) void remove({ token, id: p._id });
+          }}
+        >
+          ×
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function CopyLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="min-h-12 font-medium underline"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(link);
+          setCopied(true);
+        } catch {
+          setCopied(false);
+        }
+      }}
+    >
+      {copied ? "Lien copié" : "Copier son lien"}
+    </button>
+  );
+}
+
 
 function Participants({ token }: { token: string }) {
   const invite = useInviteCode(token);
   const list = useQuery(api.admin.participants, { token });
   const add = useMutation(api.admin.addParticipants);
-  const update = useMutation(api.admin.updateParticipant);
-  const remove = useMutation(api.admin.removeParticipant);
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    fonction: "",
-  });
+  const sendInvites = useAction(api.mail.sendInvites);
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", fonction: "" });
   const [bulk, setBulk] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const withMail = (list ?? []).filter((p) => p.active && p.email);
 
   async function submit(entries: ReturnType<typeof parseParticipants>) {
     setError(null);
     try {
       const n = await add({ token, list: entries });
-      setMsg(
-        n === 0
-          ? "Déjà dans la liste."
-          : `${n} ${n > 1 ? "personnes ajoutées" : "personne ajoutée"}.`,
-      );
+      setMsg(n === 0 ? "Déjà dans la liste." : `${n} ${n > 1 ? "personnes ajoutées" : "personne ajoutée"}.`);
       return true;
     } catch (e) {
       setError(errorMessage(e, "Ajout impossible."));
@@ -407,89 +503,39 @@ function Participants({ token }: { token: string }) {
   return (
     <Card>
       <h2 className="mb-1 text-xl font-bold">Participant·es</h2>
-      <p className="mb-3 text-sm text-muted">
-        Les personnes actives apparaissent sur l'écran « Rejoindre » : un tap
-        sur son nom suffit.
-      </p>
+      <p className="mb-3 text-sm text-muted">Les personnes actives apparaissent sur l'écran « Rejoindre » : un tap sur son nom suffit.</p>
+      <MailMode token={token} />
       {list !== undefined && list.length > 0 && !invite && (
-        <p className="mb-2 text-sm font-medium">Crée d'abord un code du jour pour pouvoir envoyer les accès.</p>
+        <p className="mb-2 text-sm font-medium">Crée d'abord un code du jour pour pouvoir envoyer les invitations.</p>
       )}
-      {invite && list && list.some((p) => p.active && p.email) && (
-        <a
-          className="mb-3 flex min-h-12 items-center justify-center rounded-xl bg-ink px-4 font-medium text-white"
-          href={mailto(
-            list.filter((p) => p.active && p.email).map((p) => p.email!),
-            "Exercice d'évacuation : ton accès",
-            inviteBody(inviteLink(invite.code), invite.code, invite.validDate),
-            true,
-          )}
+      {invite && withMail.length > 0 && (
+        <Button
+          className="mb-3 w-full"
+          variant="dark"
+          disabled={sending}
+          onClick={async () => {
+            if (!window.confirm(`Envoyer l'invitation (code ${invite.code}) à ${withMail.length} personne${withMail.length > 1 ? "s" : ""} ?`)) return;
+            setSending(true);
+            setMsg(null);
+            try {
+              setMsg(resultText(await sendInvites({ token, codeId: invite._id })));
+            } catch (e) {
+              setError(errorMessage(e, "Envoi impossible."));
+            } finally {
+              setSending(false);
+            }
+          }}
         >
-          Un courriel à tout le monde (code {invite.code})
-        </a>
+          {sending ? "Envoi en cours…" : `Envoyer les invitations à tout le monde (${withMail.length})`}
+        </Button>
       )}
       {list === undefined ? (
         <Spinner />
       ) : (
         <ul className="mb-3 flex flex-col">
-          {list.length === 0 && (
-            <li className="text-muted">Aucune personne inscrite.</li>
-          )}
+          {list.length === 0 && <li className="text-muted">Aucune personne inscrite.</li>}
           {list.map((p) => (
-            <li
-              key={p._id}
-              className="flex items-center justify-between gap-2 border-b border-line py-2 last:border-0"
-            >
-              <div className="min-w-0">
-                <p
-                  className={`truncate font-medium ${p.active ? "" : "text-muted line-through"}`}
-                >
-                  {p.firstName} {p.lastName}
-                </p>
-                <p className="truncate text-sm text-muted">
-                  {[p.fonction, p.email].filter(Boolean).join(" · ")}
-                </p>
-                {invite && p.active && (
-                  <PersonInvite
-                    code={invite.code}
-                    date={invite.validDate}
-                    firstName={p.firstName}
-                    name={`${p.firstName} ${p.lastName}`.trim()}
-                    email={p.email}
-                  />
-                )}
-              </div>
-              <div className="flex shrink-0 gap-1">
-                <Chip
-                  active={p.active}
-                  onClick={() =>
-                    void update({
-                      token,
-                      id: p._id,
-                      firstName: p.firstName,
-                      lastName: p.lastName,
-                      email: p.email,
-                      fonction: p.fonction,
-                      active: !p.active,
-                    })
-                  }
-                >
-                  {p.active ? "Actif" : "Inactif"}
-                </Chip>
-                <button
-                  type="button"
-                  className="min-h-12 min-w-12 rounded-xl text-xl"
-                  aria-label={`Supprimer ${p.firstName} ${p.lastName}`}
-                  onClick={() => {
-                    if (
-                      window.confirm(`Supprimer ${p.firstName} ${p.lastName} ?`)
-                    )
-                      void remove({ token, id: p._id as Id<"participants"> });
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            </li>
+            <ParticipantRow key={p._id} p={p} token={token} invite={invite} />
           ))}
         </ul>
       )}
@@ -498,73 +544,26 @@ function Participants({ token }: { token: string }) {
         className="flex flex-col gap-2"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (
-            await submit([
-              {
-                ...form,
-                email: form.email || undefined,
-                fonction: form.fonction || undefined,
-              },
-            ])
-          ) {
+          if (await submit([{ ...form, email: form.email || undefined, fonction: form.fonction || undefined }])) {
             setForm({ firstName: "", lastName: "", email: "", fonction: "" });
           }
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          <input
-            className="field"
-            aria-label="Prénom"
-            placeholder="Prénom"
-            value={form.firstName}
-            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-          />
-          <input
-            className="field"
-            aria-label="Nom"
-            placeholder="Nom"
-            value={form.lastName}
-            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-          />
+          <input className="field" aria-label="Prénom" placeholder="Prénom" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+          <input className="field" aria-label="Nom" placeholder="Nom" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
         </div>
-        <input
-          className="field"
-          type="email"
-          aria-label="Courriel"
-          placeholder="Courriel"
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-        <input
-          className="field"
-          aria-label="Fonction"
-          placeholder="Fonction"
-          value={form.fonction}
-          onChange={(e) => setForm({ ...form, fonction: e.target.value })}
-        />
-        <Button
-          type="submit"
-          variant="dark"
-          disabled={!form.firstName.trim() && !form.lastName.trim()}
-        >
+        <input className="field" type="email" aria-label="Courriel" placeholder="Courriel" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input className="field" aria-label="Fonction" placeholder="Fonction" value={form.fonction} onChange={(e) => setForm({ ...form, fonction: e.target.value })} />
+        <Button type="submit" variant="dark" disabled={!form.firstName.trim() && !form.lastName.trim()}>
           Ajouter
         </Button>
       </form>
 
       <details className="mt-3">
-        <summary className="min-h-12 cursor-pointer py-3 font-medium">
-          Coller une liste
-        </summary>
-        <p className="mb-2 text-sm text-muted">
-          Une personne par ligne : Prénom; Nom; courriel; fonction
-        </p>
-        <textarea
-          className="field"
-          rows={5}
-          aria-label="Liste à importer"
-          value={bulk}
-          onChange={(e) => setBulk(e.target.value)}
-        />
+        <summary className="min-h-12 cursor-pointer py-3 font-medium">Coller une liste</summary>
+        <p className="mb-2 text-sm text-muted">Une personne par ligne : Prénom; Nom; courriel; fonction</p>
+        <textarea className="field" rows={5} aria-label="Liste à importer" value={bulk} onChange={(e) => setBulk(e.target.value)} />
         <Button
           className="mt-2"
           variant="dark"
@@ -584,6 +583,62 @@ function Participants({ token }: { token: string }) {
       {error && (
         <div className="mt-2">
           <ErrorBox>{error}</ErrorBox>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function MailJournal({ token }: { token: string }) {
+  const list = useQuery(api.mailData.journal, { token });
+  const [preview, setPreview] = useState<string | null>(null);
+  const STATUS = { sent: "Envoyé", simulated: "Simulé", error: "Erreur" } as const;
+  return (
+    <Card>
+      <h2 className="mb-1 text-xl font-bold">Journal des courriels</h2>
+      {list === undefined ? (
+        <Spinner />
+      ) : list.length === 0 ? (
+        <p className="text-muted">Aucun envoi pour l'instant.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {list.map((m) => (
+            <li key={m._id} className="flex items-center justify-between gap-2 border-b border-line py-2 last:border-0">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{m.to}</p>
+                <p className="truncate text-sm text-muted">
+                  {new Date(m.sentAt).toLocaleString("fr-CH", { dateStyle: "short", timeStyle: "short" })} · {m.subject}
+                  {m.attachments?.length ? ` · ${m.attachments.length} pièce${m.attachments.length > 1 ? "s" : ""} jointe${m.attachments.length > 1 ? "s" : ""}` : ""}
+                </p>
+                {m.error && <p className="text-sm text-brand-dark">{m.error}</p>}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-sm font-bold ${
+                    m.status === "sent" ? "bg-ok text-white" : m.status === "error" ? "bg-brand text-white" : "bg-amber text-ink"
+                  }`}
+                >
+                  {STATUS[m.status]}
+                </span>
+                {m.html && (
+                  <Button variant="secondary" onClick={() => setPreview(m.html!)}>
+                    Aperçu
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 p-3" role="dialog" aria-modal aria-label="Aperçu du courriel">
+          <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white">
+            {/* sandbox without scripts: the mail is displayed, never executed */}
+            <iframe title="Aperçu du courriel" sandbox="" srcDoc={preview} className="h-full w-full flex-1" />
+            <Button className="m-2" onClick={() => setPreview(null)}>
+              Fermer
+            </Button>
+          </div>
         </div>
       )}
     </Card>

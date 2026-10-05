@@ -10,6 +10,6 @@ export default defineConfig(({ command }) => ({
   // pdfmake and docx are lazy-loaded only when exporting
   build: { chunkSizeWarningLimit: 1500 },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "convex/**/*.test.ts"],
   },
 }));

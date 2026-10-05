@@ -13,6 +13,7 @@ test("responsive captures", async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto(`./#/?k=${CODE}`);
   const picker = page.getByLabel("École", { exact: true });
+  await expect(picker.or(page.getByLabel("Nom de l'école"))).toBeVisible();
   await expect(page.getByText("Nouvel exercice")).toBeVisible();
   if (await picker.isVisible()) await picker.selectOption({ label: "Autre école…" });
   await page.getByLabel("Nom de l'école").fill("École de Platy");

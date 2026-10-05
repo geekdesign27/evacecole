@@ -38,6 +38,7 @@ test("full exercise with three phones, offline safety and both exports", async (
   await lead.goto(`./#/?k=${CODE}`);
   await expect(lead.getByText("Nouvel exercice")).toBeVisible();
   const picker = lead.getByLabel("École", { exact: true });
+  await expect(picker.or(lead.getByLabel("Nom de l'école"))).toBeVisible();
   if (await picker.isVisible()) await picker.selectOption({ label: "Autre école…" });
   await lead.getByLabel("Nom de l'école").fill(school);
   await lead.getByRole("button", { name: "Créer l'exercice du jour" }).click();

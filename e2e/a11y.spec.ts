@@ -9,6 +9,7 @@ test("exercise screen has no accessibility violations", async ({ page }) => {
   await page.goto(`./#/?k=${CODE}`);
   await expect(page.getByText("Nouvel exercice")).toBeVisible();
   const picker = page.getByLabel("École", { exact: true });
+  await expect(picker.or(page.getByLabel("Nom de l'école"))).toBeVisible();
   if (await picker.isVisible()) await picker.selectOption({ label: "Autre école…" });
   await page.getByLabel("Nom de l'école").fill("École a11y");
   await page.getByRole("button", { name: "Créer l'exercice du jour" }).click();

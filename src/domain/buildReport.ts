@@ -67,6 +67,8 @@ export interface ReportFields {
   objective?: string;
   criteria?: string;
   conclusion?: string;
+  /** Message of the end-of-day e-mail (rich text). */
+  mailMessage?: string;
   /** Free text written by the report author, one paragraph per line. */
   recommendations?: string;
 }

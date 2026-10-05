@@ -33,17 +33,9 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await admin.getByRole("button", { name: "Créer le code" }).click();
   await expect(admin.locator("li", { hasText: code }).getByText("Actif")).toBeVisible();
 
-  // Invitations: ready-made mail for everyone and per person
-  const all = admin.getByRole("link", { name: /Un courriel à tout le monde/ });
-  await expect(all).toHaveAttribute("href", /^mailto:\?bcc=alice%40example\.ch/);
-  const personal = admin.locator("li", { hasText: `Alice Test${suffix}` }).getByRole("link", { name: "Envoyer par courriel" });
-  const href = decodeURIComponent((await personal.getAttribute("href"))!);
-  expect(href).toContain(`k=${code}&n=Alice%20Test${suffix}`);
-
-  // Personal link: name already filled in on the join screen
-  const personalLink = href.match(/https?:\/\/\S+/)![0];
+  // Personal link (as sent in the invitation): code and name filled in, then removed from the address bar
   const alicePhone = await (await browser.newContext({ ...test.info().project.use })).newPage();
-  await alicePhone.goto(personalLink);
+  await alicePhone.goto(`./#/?k=${code}&n=${encodeURIComponent(`Alice Test${suffix}`)}`);
   await expect(alicePhone.getByText("Nouvel exercice")).toBeVisible();
   await expect(alicePhone).not.toHaveURL(/k=|n=/);
   await alicePhone.context().close();
@@ -53,6 +45,7 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await phone.goto(`./#/?k=${code}`);
   await expect(phone.getByText("Nouvel exercice")).toBeVisible();
   const picker = phone.getByLabel("École", { exact: true });
+  await expect(picker.or(phone.getByLabel("Nom de l'école"))).toBeVisible();
   if (await picker.isVisible()) await picker.selectOption({ label: "Autre école…" });
   await phone.getByLabel("Nom de l'école").fill(`École admin ${suffix}`);
   await phone.getByRole("button", { name: "Créer l'exercice du jour" }).click();
@@ -67,13 +60,50 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await expect(phone.getByText("Aucun code du jour actif")).toHaveCount(0);
   await phone.getByRole("button", { name: "Fermer" }).click();
 
+  // Edit a participant's e-mail
+  admin.on("dialog", (d) => d.accept());
+  await admin.getByRole("button", { name: `Modifier Bruno Test${suffix}` }).click();
+  await admin.getByLabel("Courriel").first().fill("bruno@example.ch");
+  await admin.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(admin.locator("li", { hasText: `Bruno Test${suffix}` }).getByText("Interpellateur · bruno@example.ch")).toBeVisible();
+
+  // Automatic invitations (simulated on the dev deployment) and the journal with a preview
+  await expect(admin.getByText("Mode simulation").first()).toBeVisible();
+  await admin.getByRole("button", { name: /Envoyer les invitations à tout le monde/ }).click();
+  await expect(admin.getByText(/simulés?/).first()).toBeVisible({ timeout: 20_000 });
+  const journal = admin.locator("section", { has: admin.getByRole("heading", { name: "Journal des courriels" }) });
+  await expect(journal.getByText("alice@example.ch").first()).toBeVisible();
+  await expect(journal.getByText("bruno@example.ch").first()).toBeVisible();
+  await journal.getByRole("button", { name: "Aperçu" }).first().click();
+  const mail = admin.frameLocator('iframe[title="Aperçu du courriel"]');
+  await expect(mail.getByRole("link", { name: "Ouvrir l'application" })).toHaveAttribute("href", new RegExp(`k=${code}&n=`));
+  await expect(mail.getByText(code, { exact: true })).toBeVisible();
+  await admin.getByRole("button", { name: "Fermer" }).click();
+
+  // End-of-day report mail with PDF and Word attached
+  await admin.locator("li", { hasText: code }).getByRole("button", { name: "Utiliser sur ce téléphone" }).click();
+  await admin.goto(`./#/x/${phone.url().match(/#\/x\/([^?]+)/)![1]}`);
+  await admin.goto(admin.url().replace("#/x/", "#/rapport/"));
+  await expect(admin.getByRole("heading", { name: "Envoyer le rapport par courriel" })).toBeVisible();
+  await admin.getByLabel("Autres destinataires (directions, commune…)").fill("direction@example.ch");
+  // alice@, bruno@ and direction@ (duplicates of earlier runs are sent once)
+  await admin.getByRole("button", { name: "Envoyer le rapport (3 destinataires)" }).click();
+  await expect(admin.getByText("3 simulés")).toBeVisible({ timeout: 60_000 });
+  await admin.goto("./#/admin");
+  await expect(journal.getByText("direction@example.ch").first()).toBeVisible();
+  await expect(journal.locator("li", { hasText: "direction@example.ch" }).first()).toContainText("2 pièces jointes");
+
+  // Admin device: delete button on the home cards
+  await admin.goto("./#/");
+  await expect(admin.getByRole("button", { name: `Supprimer l'exercice École admin ${suffix}` })).toBeVisible();
+
+  await admin.goto("./#/admin");
   // Revocation locks the phone out within seconds, with a clear message
   await admin.locator("li", { hasText: code }).getByRole("button", { name: "Révoquer" }).click();
   await expect(admin.locator("li", { hasText: code }).getByText("Révoqué")).toBeVisible();
   await expect(phone.getByText(/Code incorrect|n'est plus valable/)).toBeVisible({ timeout: 10_000 });
 
   // Clean up the fictitious roster
-  admin.on("dialog", (d) => d.accept());
   for (const n of ["Alice", "Bruno"]) await admin.getByRole("button", { name: `Supprimer ${n} Test${suffix}` }).click();
   await expect(admin.getByText(`Test${suffix}`)).toHaveCount(0);
 });

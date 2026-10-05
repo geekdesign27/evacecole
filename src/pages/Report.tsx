@@ -1,7 +1,7 @@
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import {
@@ -10,12 +10,13 @@ import {
   type ReportModel,
 } from "../domain/buildReport";
 import { fmtDateLong, reportFileName } from "../domain/format";
-import { device } from "../lib/storage";
+import { device, readJSON } from "../lib/storage";
 import { typo } from "../lib/typo";
 import { escapeHtml, mapRuns, parseRich, toEditorHtml, type RichRun } from "../domain/rich";
 import { RichEditor } from "../components/RichEditor";
 import { useTeam } from "../lib/team";
 import { downloadBlob, loadAssets } from "../export/assets";
+import { defaultReportMessageHtml } from "../../convex/mailTemplates";
 import { Button, Card, ErrorBox, Spinner, TopBar } from "../components/ui";
 import { errorMessage } from "../lib/errors";
 
@@ -251,6 +252,12 @@ function ReportEditor({
       )}
 
       <ExportBar model={model} label={label} />
+      <SendReport
+        model={model}
+        label={label}
+        message={fields.mailMessage ?? ""}
+        onMessage={(v) => edit("mailMessage", v)}
+      />
 
       <Card className="no-print">
         <h2 className="mb-2 text-lg font-bold">Textes du rapport</h2>
@@ -356,6 +363,168 @@ function Field({
         />
       )}
     </div>
+  );
+}
+
+async function renderBoth(model: ReportModel) {
+  const assets = await loadAssets(model);
+  const [pdf, docx] = await Promise.all([
+    import("../export/pdf").then((m) => m.renderPdf(model, assets)),
+    import("../export/docx").then((m) => m.renderDocx(model, assets)),
+  ]);
+  return { pdf, docx };
+}
+
+/** End-of-day e-mail: message + report attached, sent from the admin's Gmail. */
+function SendReport({
+  model,
+  label,
+  message,
+  onMessage,
+}: {
+  model: ReportModel;
+  label: string;
+  message: string;
+  onMessage: (v: string) => void;
+}) {
+  const { code } = useTeam();
+  const adminToken = readJSON<string>("evac:admin", "");
+  const isAdmin = useQuery(api.admin.me, adminToken ? { token: adminToken } : "skip");
+  const people = useQuery(api.admin.participants, isAdmin ? { token: adminToken } : "skip");
+  const mode = useQuery(api.mailData.mailMode, isAdmin ? { token: adminToken } : "skip");
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const sendReport = useAction(api.mail.sendReport);
+  const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
+  const [extra, setExtra] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isAdmin) {
+    return (
+      <Card className="no-print">
+        <h2 className="mb-1 text-lg font-bold">Envoyer le rapport par courriel</h2>
+        <p className="text-sm text-muted">
+          Réservé à l'administrateur.{" "}
+          <Link to="/admin" className="underline">
+            Se connecter dans Gestion
+          </Link>
+          .
+        </p>
+      </Card>
+    );
+  }
+
+  const withMail = (people ?? []).filter((p) => p.active && p.email);
+  const extraList = extra
+    .split(/[\s,;]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  // Same address twice (two entries, or typed again) is sent only once.
+  const recipients = [
+    ...new Set([...withMail.filter((p) => !unchecked.has(p._id)).map((p) => p.email!), ...extraList].map((e) => e.toLowerCase())),
+  ];
+  const shownMessage = message || defaultReportMessageHtml(model.dateLong);
+
+  async function send() {
+    if (!recipients.length) return;
+    if (!window.confirm(`Envoyer le rapport (PDF et Word) à ${recipients.length} destinataire${recipients.length > 1 ? "s" : ""} ?`)) return;
+    setBusy(true);
+    setResult(null);
+    setError(null);
+    try {
+      const { pdf, docx } = await renderBoth(model);
+      const upload = async (blob: Blob, filename: string, contentType: string) => {
+        const url = await generateUploadUrl({ code });
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": contentType }, body: blob });
+        if (!res.ok) throw new Error(`Envoi du fichier refusé (${res.status}).`);
+        const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+        return { storageId, filename, contentType };
+      };
+      const files = await Promise.all([
+        upload(pdf, reportFileName(model.exDate, label, "pdf"), "application/pdf"),
+        upload(docx, reportFileName(model.exDate, label, "docx"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+      ]);
+      const r = await sendReport({
+        token: adminToken,
+        recipients,
+        title: model.title,
+        exDate: model.exDate,
+        message: parseRich(shownMessage),
+        files,
+      });
+      const parts = [];
+      if (r.sent) parts.push(`${r.sent} envoyé${r.sent > 1 ? "s" : ""}`);
+      if (r.simulated) parts.push(`${r.simulated} simulé${r.simulated > 1 ? "s" : ""}`);
+      if (r.errors) parts.push(`${r.errors} en erreur (voir le journal dans Gestion)`);
+      setResult(parts.join(", "));
+    } catch (e) {
+      setError(errorMessage(e, "Envoi impossible."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="no-print">
+      <h2 className="mb-1 text-lg font-bold">Envoyer le rapport par courriel</h2>
+      {mode?.simulated ? (
+        <p className="mb-3 rounded-xl border-2 border-amber bg-amber/15 p-3 text-sm">
+          <strong>Mode simulation :</strong> rien ne part réellement, les envois apparaissent dans le journal de Gestion.
+        </p>
+      ) : (
+        mode && <p className="mb-3 text-sm text-muted">Envoi depuis {mode.from}, avec le rapport en PDF et en Word.</p>
+      )}
+      <fieldset className="mb-3">
+        <legend className="mb-1 font-medium">Destinataires</legend>
+        {withMail.length === 0 && <p className="text-sm text-muted">Aucun·e participant·e avec une adresse.</p>}
+        {withMail.map((p) => (
+          <label key={p._id} className="flex min-h-12 items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-6 w-6 accent-brand"
+              checked={!unchecked.has(p._id)}
+              onChange={() =>
+                setUnchecked((s) => {
+                  const n = new Set(s);
+                  if (n.has(p._id)) n.delete(p._id);
+                  else n.add(p._id);
+                  return n;
+                })
+              }
+            />
+            <span>
+              {p.firstName} {p.lastName} <span className="text-sm text-muted">{p.email}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <label htmlFor="extra-recipients" className="font-medium">
+        Autres destinataires (directions, commune…)
+      </label>
+      <textarea
+        id="extra-recipients"
+        className="field mb-3"
+        rows={2}
+        placeholder="Une adresse par ligne"
+        value={extra}
+        onChange={(e) => setExtra(e.target.value)}
+      />
+      <RichEditor id="mail-message" label="Message d'accompagnement" value={shownMessage} onChange={onMessage} minRows={6} />
+      {error && (
+        <div className="mt-2">
+          <ErrorBox>{error}</ErrorBox>
+        </div>
+      )}
+      {result && (
+        <p className="mt-2 font-medium" role="status">
+          {result}
+        </p>
+      )}
+      <Button className="mt-3 w-full" onClick={send} disabled={busy || recipients.length === 0}>
+        {busy ? "Préparation et envoi…" : `Envoyer le rapport (${recipients.length} destinataire${recipients.length > 1 ? "s" : ""})`}
+      </Button>
+    </Card>
   );
 }
 

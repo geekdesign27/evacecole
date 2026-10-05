@@ -79,6 +79,18 @@ export default defineSchema({
     lockedUntil: v.number(),
   }),
 
+  // Every e-mail the app sends (or simulates), for the admin journal.
+  mailLog: defineTable({
+    kind: v.union(v.literal("invite"), v.literal("report")),
+    to: v.string(),
+    subject: v.string(),
+    status: v.union(v.literal("sent"), v.literal("simulated"), v.literal("error")),
+    error: v.optional(v.string()),
+    html: v.optional(v.string()),
+    attachments: v.optional(v.array(v.string())),
+    sentAt: v.number(),
+  }).index("by_sentAt", ["sentAt"]),
+
   // Editable fields of a multi-school day report (not tied to one exercise).
   dayReports: defineTable({
     exDate: v.string(),
