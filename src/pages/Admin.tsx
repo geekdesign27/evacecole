@@ -153,7 +153,7 @@ function SmallBtn({ className = "", children, ...props }: React.ButtonHTMLAttrib
     <button
       type="button"
       {...props}
-      className={`flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg border-2 border-line bg-white px-2 text-[15px] font-medium ${className}`}
+      className={`flex h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border-2 border-line bg-white px-2 text-[15px] font-medium [&>svg]:shrink-0 ${className}`}
     >
       {children}
     </button>
@@ -349,7 +349,7 @@ function Codes({ token }: { token: string }) {
                 </SmallBtn>
                 {c.active && deviceCode !== c.code && (
                   <SmallBtn aria-label="Utiliser sur ce téléphone" onClick={() => setCode(c.code)}>
-                    <Smartphone size={18} /> Ce téléphone
+                    <Smartphone size={18} /> Utiliser
                   </SmallBtn>
                 )}
                 <CodeDates token={token} id={c._id} validDate={c.validDate} validUntil={c.validUntil ?? c.validDate} />
