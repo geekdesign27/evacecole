@@ -62,7 +62,8 @@ export default defineSchema({
   // Day codes created by the admin: valid on one date, revocable at any time.
   accessCodes: defineTable({
     code: v.string(),
-    validDate: v.string(), // YYYY-MM-DD, Europe/Zurich
+    validDate: v.string(), // first valid day, YYYY-MM-DD, Europe/Zurich
+    validUntil: v.optional(v.string()), // last valid day (same day when absent)
     label: v.optional(v.string()),
     revoked: v.boolean(),
     createdAt: v.number(),

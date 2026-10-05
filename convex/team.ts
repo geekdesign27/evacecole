@@ -1,6 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { assertTeam, isValidCode, zurichToday } from "./lib";
+import { assertTeam, isCodeActive, isValidCode, zurichToday } from "./lib";
 
 export const check = query({
   args: { code: v.string() },
@@ -31,7 +31,7 @@ export const shareCode = query({
     const today = zurichToday();
     const all = await ctx.db.query("accessCodes").collect();
     const active = all
-      .filter((c) => !c.revoked && c.validDate === today)
+      .filter((c) => isCodeActive(c, today))
       .sort((a, b) => b.createdAt - a.createdAt);
     // A day-code holder shares its own code, so revoking it cannot be dodged through a newer one.
     const own = active.find((c) => c.code === code.trim().toLowerCase());

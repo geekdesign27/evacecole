@@ -33,6 +33,31 @@ test("admin creates a day code and a roster; revoking the code locks devices out
   await admin.getByRole("button", { name: "Créer le code" }).click();
   await expect(admin.locator("li", { hasText: code }).getByText("Actif")).toBeVisible();
 
+  // A code from yesterday is expired; extending its end date reactivates it
+  const yesterday = new Date(Date.now() - 86_400_000).toLocaleDateString("sv-SE");
+  const today = new Date().toLocaleDateString("sv-SE");
+  const old = `hier${suffix}`;
+  await admin.getByLabel("Valable du").first().fill(yesterday);
+  await admin.getByLabel("au", { exact: true }).first().fill(yesterday);
+  await admin.getByLabel("Mon code").fill(old);
+  await admin.getByRole("button", { name: "Créer le code" }).click();
+  const oldRow = admin.locator("li", { hasText: old });
+  await expect(oldRow.getByText("Expiré")).toBeVisible();
+  await oldRow.getByRole("button", { name: "Dates / prolonger" }).click();
+  await oldRow.getByLabel("au", { exact: true }).fill(today);
+  await oldRow.getByRole("button", { name: "Enregistrer les dates" }).click();
+  await expect(oldRow.getByText("Actif")).toBeVisible();
+  const oldPhone = await (await browser.newContext({ ...test.info().project.use })).newPage();
+  await oldPhone.goto(`./#/?k=${old}`);
+  await expect(oldPhone.getByText("Nouvel exercice")).toBeVisible();
+  await oldRow.getByRole("button", { name: "Révoquer" }).click();
+  await expect(oldPhone.getByText(/n'est plus valable/)).toBeVisible({ timeout: 10_000 });
+  await expect(oldPhone.getByRole("link", { name: /ouvrir la gestion des codes/ })).toBeVisible();
+  await oldPhone.context().close();
+  // back to a one-day period for the next code
+  await admin.getByLabel("Valable du").first().fill(today);
+  await admin.getByLabel("au", { exact: true }).first().fill(today);
+
   // Personal link (as sent in the invitation): code and name filled in, then removed from the address bar
   const alicePhone = await (await browser.newContext({ ...test.info().project.use })).newPage();
   await alicePhone.goto(`./#/?k=${code}&n=${encodeURIComponent(`Alice Test${suffix}`)}`);

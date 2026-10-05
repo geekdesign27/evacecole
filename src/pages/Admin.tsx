@@ -143,12 +143,66 @@ function Login({ onLogged }: { onLogged: (token: string) => void }) {
   );
 }
 
+function periodText(from: string, to?: string) {
+  return !to || to === from ? fmtDateLong(from) : `du ${fmtDateLong(from)} au ${fmtDateLong(to)}`;
+}
+
+/** Inline editor of a code's validity period (extending the end date reactivates it). */
+function CodeDates({ token, id, validDate, validUntil }: { token: string; id: Id<"accessCodes">; validDate: string; validUntil: string }) {
+  const setDates = useMutation(api.admin.setCodeDates);
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState(validDate);
+  const [to, setTo] = useState(validUntil < todayIso() ? todayIso() : validUntil);
+  const [error, setError] = useState<string | null>(null);
+  if (!open) {
+    return (
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        Dates / prolonger
+      </Button>
+    );
+  }
+  return (
+    <div className="flex basis-full flex-col gap-2 rounded-xl bg-bg p-3">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col text-sm font-medium">
+          Valable du
+          <input type="date" className="field" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label className="flex flex-col text-sm font-medium">
+          au
+          <input type="date" className="field" min={from} value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+      </div>
+      {error && <ErrorBox>{error}</ErrorBox>}
+      <div className="flex gap-2">
+        <Button
+          onClick={async () => {
+            setError(null);
+            try {
+              await setDates({ token, id, validDate: from, validUntil: to });
+              setOpen(false);
+            } catch (e) {
+              setError(errorMessage(e, "Enregistrement impossible."));
+            }
+          }}
+        >
+          Enregistrer les dates
+        </Button>
+        <Button variant="secondary" onClick={() => setOpen(false)}>
+          Annuler
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Codes({ token }: { token: string }) {
   const codes = useQuery(api.admin.codes, { token });
   const create = useMutation(api.admin.createCode);
   const revoke = useMutation(api.admin.revokeCode);
   const { code: deviceCode, setCode } = useTeam();
   const [date, setDate] = useState(todayIso());
+  const [until, setUntil] = useState(todayIso());
   const [label, setLabel] = useState("");
   const [custom, setCustom] = useState("");
   const [shown, setShown] = useState<string | null>(null);
@@ -159,26 +213,35 @@ function Codes({ token }: { token: string }) {
     <Card>
       <h2 className="mb-1 text-xl font-bold">Codes du jour</h2>
       <p className="mb-3 text-sm text-muted">
-        Valable uniquement à la date choisie. Le QR code d'un exercice transmet
-        le code du jour actif.
+        Valable du premier au dernier jour choisis (inclus). Le QR code d'un exercice transmet le code
+        actif. Un code expiré se réactive en prolongeant sa date de fin.
       </p>
       <div className="flex flex-col gap-2">
         <div className="grid grid-cols-2 gap-2">
-          <input
-            type="date"
-            className="field"
-            aria-label="Date de validité"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <input
-            className="field"
-            aria-label="Libellé"
-            placeholder="Libellé (facultatif)"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-          />
+          <label className="flex flex-col text-sm font-medium">
+            Valable du
+            <input
+              type="date"
+              className="field"
+              value={date}
+              onChange={(e) => {
+                setDate(e.target.value);
+                if (until < e.target.value) setUntil(e.target.value);
+              }}
+            />
+          </label>
+          <label className="flex flex-col text-sm font-medium">
+            au
+            <input type="date" className="field" min={date} value={until} onChange={(e) => setUntil(e.target.value)} />
+          </label>
         </div>
+        <input
+          className="field"
+          aria-label="Libellé"
+          placeholder="Libellé (facultatif)"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
         <input
           className="field"
           aria-label="Mon code"
@@ -195,6 +258,7 @@ function Codes({ token }: { token: string }) {
               const c = await create({
                 token,
                 validDate: date,
+                validUntil: until,
                 label: label || undefined,
                 custom: custom || undefined,
               });
@@ -223,7 +287,7 @@ function Codes({ token }: { token: string }) {
                     {c.code}
                   </p>
                   <p className="text-sm text-muted">
-                    {fmtDateLong(c.validDate)}
+                    {periodText(c.validDate, c.validUntil)}
                     {c.label ? ` · ${c.label}` : ""}
                   </p>
                 </div>
@@ -270,6 +334,7 @@ function Codes({ token }: { token: string }) {
                     Utiliser sur ce téléphone
                   </Button>
                 )}
+                <CodeDates token={token} id={c._id} validDate={c.validDate} validUntil={c.validUntil ?? c.validDate} />
                 <Button
                   variant={c.revoked ? "secondary" : "primary"}
                   onClick={() =>

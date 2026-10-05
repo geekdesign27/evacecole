@@ -21,7 +21,12 @@ export async function isValidCode(ctx: QueryCtx, code: string): Promise<boolean>
     .query("accessCodes")
     .withIndex("by_code", (q) => q.eq("code", c))
     .first();
-  return !!day && !day.revoked && day.validDate === zurichToday();
+  return !!day && isCodeActive(day, zurichToday());
+}
+
+/** A day code is usable from validDate to validUntil (inclusive), unless revoked. */
+export function isCodeActive(c: { revoked: boolean; validDate: string; validUntil?: string }, today: string): boolean {
+  return !c.revoked && c.validDate <= today && today <= (c.validUntil ?? c.validDate);
 }
 
 /** Every public function takes the access code and checks it server-side. */

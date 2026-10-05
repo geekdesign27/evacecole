@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
+import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { useTeam } from "../lib/team";
 import { Button, Card, ErrorBox, Logo, Spinner } from "./ui";
@@ -54,6 +55,9 @@ export function TeamGate({ children }: { children: ReactNode }) {
             </ErrorBox>
           )}
           <Button type="submit">Entrer</Button>
+          <Link to="/admin" className="flex min-h-12 items-center justify-center font-medium underline">
+            Administrateur : ouvrir la gestion des codes
+          </Link>
           <p className="text-sm text-muted">
             Saisi une seule fois, l'appareil le garde en mémoire.
           </p>

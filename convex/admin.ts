@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { assertAdmin, zurichToday } from "./lib";
+import { assertAdmin, isCodeActive, zurichToday } from "./lib";
 
 const SESSION_MS = 7 * 24 * 3600 * 1000;
 const MAX_FAILURES = 5;
@@ -194,8 +194,8 @@ export const codes = query({
       .slice(0, 50)
       .map((c) => ({
         ...c,
-        active: !c.revoked && c.validDate === today,
-        expired: c.validDate < today,
+        active: isCodeActive(c, today),
+        expired: (c.validUntil ?? c.validDate) < today,
       }));
   },
 });
@@ -204,14 +204,16 @@ export const createCode = mutation({
   args: {
     token: v.string(),
     validDate: v.string(),
+    validUntil: v.optional(v.string()),
     label: v.optional(v.string()),
     /** Code chosen by the admin (easy to dictate); generated when empty. */
     custom: v.optional(v.string()),
   },
-  handler: async (ctx, { token, validDate, label, custom }) => {
+  handler: async (ctx, { token, validDate, validUntil, label, custom }) => {
     await assertAdmin(ctx, token);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(validDate))
-      throw new ConvexError("Date invalide.");
+    if (!ISO.test(validDate)) throw new ConvexError("Date invalide.");
+    const until = validUntil || validDate;
+    if (!ISO.test(until) || until < validDate) throw new ConvexError("La date de fin doit suivre la date de début.");
     let code = `${randomString(4)}-${randomString(4)}-${randomString(4)}`;
     if (custom?.trim()) {
       code = custom.trim().toLowerCase();
@@ -228,11 +230,25 @@ export const createCode = mutation({
     await ctx.db.insert("accessCodes", {
       code,
       validDate,
+      validUntil: until,
       label: label?.trim().slice(0, 80) || undefined,
       revoked: false,
       createdAt: Date.now(),
     });
     return code;
+  },
+});
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Changes the validity period: extending the end date reactivates an expired code. */
+export const setCodeDates = mutation({
+  args: { token: v.string(), id: v.id("accessCodes"), validDate: v.string(), validUntil: v.string() },
+  handler: async (ctx, { token, id, validDate, validUntil }) => {
+    await assertAdmin(ctx, token);
+    if (!ISO.test(validDate) || !ISO.test(validUntil)) throw new ConvexError("Date invalide.");
+    if (validUntil < validDate) throw new ConvexError("La date de fin doit suivre la date de début.");
+    await ctx.db.patch(id, { validDate, validUntil });
   },
 });
 

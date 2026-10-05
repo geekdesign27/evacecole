@@ -13,7 +13,7 @@ et n'est jamais écrit dans le dépôt.
 
 ## Accès
 
-- **Codes du jour** (table `accessCodes`) : créés dans la page « Gestion » (`#/admin`), valables à une date
+- **Codes du jour** (table `accessCodes`) : créés dans la page « Gestion » (`#/admin`), valables sur une période `validDate` à `validUntil` incluse (prolongeable, ce qui réactive un code expiré), dates
   (heure de Zurich), révocables. Le QR d'un exercice transmet le code du jour actif (`team.shareCode`),
   jamais le code permanent.
 - **`TEAM_CODE`** (variable d'environnement Convex) : code permanent de secours, réservé à l'admin.
