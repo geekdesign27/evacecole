@@ -88,6 +88,10 @@ test("full exercise with three phones, offline safety and both exports", async (
   await chooser.setFiles("public/icon-512.png");
   await expect(item(obs1, "Aucune porte calée").locator("img")).toBeVisible({ timeout: 10_000 });
   await answer(obs2, "Portes fermées après le passage", "Oui");
+  // Empty-zone shortcut: remaining behaviour points become N/A, given answers are kept
+  await obs2.getByRole("button", { name: /Personne dans ma zone/ }).click();
+  await expect(item(obs2, "Élèves calmes").getByRole("radio", { name: "N/A", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(item(obs2, "Portes fermées après le passage").getByRole("radio", { name: "Oui", exact: true })).toHaveAttribute("aria-checked", "true");
   await answer(obs2, "Alarme évacuation audible", "Faible");
   await answer(lead, "Réaction rapide et décision adaptée", "Oui");
   await answer(lead, "Connaît le numéro des pompiers (118)", "Non");

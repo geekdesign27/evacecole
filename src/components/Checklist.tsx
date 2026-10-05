@@ -9,7 +9,7 @@ import {
 import type { Draft } from "../lib/sync";
 import { PhotoButton, Thumbs } from "./Photos";
 import { Card } from "./ui";
-import { MessageSquare, MessageSquareText } from "lucide-react";
+import { MessageSquare, MessageSquareText, UserX } from "lucide-react";
 
 const OPTIONS: { v: AnswerValue; label: string; on: string }[] = [
   { v: "ok", label: "Oui", on: "bg-ok text-white border-ok" },
@@ -32,6 +32,13 @@ export function Checklist({ role, draft, setDraft, code, photoUrls }: Props) {
       {sectionsForRole(role).map((section) => (
         <Card key={section.id}>
           <h2 className="mb-1 text-xl font-bold">{section.title}</h2>
+          {section.id === "comportement" && (
+            <EmptyZoneButton
+              itemIds={section.items.filter((i) => i.allowNa).map((i) => i.id)}
+              draft={draft}
+              setDraft={setDraft}
+            />
+          )}
           <ul className="flex flex-col">
             {section.items.map((item) => (
               <ItemRow
@@ -151,5 +158,35 @@ function ItemRow({
         />
       )}
     </li>
+  );
+}
+
+/** Empty floor: sets N/A on every behaviour point not answered yet (answers already given are kept). */
+function EmptyZoneButton({
+  itemIds,
+  draft,
+  setDraft,
+}: {
+  itemIds: string[];
+  draft: Draft;
+  setDraft: Props["setDraft"];
+}) {
+  const open = itemIds.filter((id) => !draft.answers[id]?.v);
+  if (!open.length) return null;
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        setDraft((d) => {
+          const answers = { ...d.answers };
+          for (const id of itemIds) if (!answers[id]?.v) answers[id] = { ...answers[id], v: "na" };
+          return { ...d, answers };
+        })
+      }
+      className="mb-1 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line px-3 text-sm font-medium text-muted"
+    >
+      <UserX size={20} />
+      Personne dans ma zone : mettre les points restants en N/A
+    </button>
   );
 }

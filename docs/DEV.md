@@ -61,6 +61,7 @@ Variable d'environnement Convex de production : `TEAM_CODE` (Dashboard Convex, S
   étages, Technique) où les réponses de l'équipe sont fusionnées point par point : points à améliorer d'abord, avec
   les zones concernées et « En ordre : … », puis les points conformes en un seul paragraphe. Remarques et photos
   (vignettes, 3 par ligne) en fin de section. En rapport de journée, chaque école commence sur une nouvelle page.
+- **N/A** : disponible sur les 9 points de comportement, « Classe confiée », local du sinistre et signal lumineux ; jamais sur l'alarme audible ni les chemins de fuite. Un N/A est ignoré dans le rapport (ligne, zones, décompte, commentaire). Bouton « Personne dans ma zone » pour un étage vide.
 - **Recommandations** : texte libre de l'auteur. Les recommandations déduites des points Partiel/Non sont proposées
   par le bouton « Insérer les suggestions ».
 - **Objectif** et **Critères d'évaluation** : sections éditables sous l'introduction. Les critères sont préremplis depuis `checklist.ts` (`defaultCriteria`), donc toujours alignés sur la grille.

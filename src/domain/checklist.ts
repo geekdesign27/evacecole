@@ -62,6 +62,7 @@ export const SECTIONS: ChecklistSection[] = [
           "Peut mieux faire, la classe n'a pas été réellement transmise.",
         no: "Classe non confiée à un·e collègue.",
         reco: "formation",
+        allowNa: true,
       },
       {
         id: "l_closedoor",
@@ -175,6 +176,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Élèves agités par moments.",
         no: "Élèves agités.",
         reco: null,
+        allowNa: true,
       },
       {
         id: "o_calm_staff",
@@ -183,6 +185,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Personnel parfois hésitant.",
         no: "Personnel désorganisé.",
         reco: "formation",
+        allowNa: true,
       },
       {
         id: "o_procedure",
@@ -191,6 +194,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Méconnaissance partielle de la procédure.",
         no: "Méconnaissance de la procédure.",
         reco: "formation",
+        allowNa: true,
       },
       {
         id: "o_exits",
@@ -199,6 +203,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Sorties les plus proches pas toujours utilisées.",
         no: "Sorties de secours les plus proches non utilisées.",
         reco: "sorties",
+        allowNa: true,
       },
       {
         id: "o_doors",
@@ -207,6 +212,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Quelques portes sont restées ouvertes.",
         no: "Plusieurs portes sont restées ouvertes.",
         reco: "portes",
+        allowNa: true,
       },
       {
         id: "o_windows",
@@ -215,6 +221,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Quelques fenêtres sont restées ouvertes.",
         no: "Plusieurs fenêtres sont restées ouvertes.",
         reco: "portes",
+        allowNa: true,
       },
       {
         id: "o_nowedge",
@@ -223,6 +230,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Une porte calée constatée.",
         no: "Plusieurs portes calées constatées.",
         reco: "calage",
+        allowNa: true,
       },
       {
         id: "o_annex",
@@ -231,6 +239,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Locaux communs contrôlés en partie.",
         no: "Pas de contrôle des locaux communs.",
         reco: "annexes",
+        allowNa: true,
       },
       {
         id: "o_announce",
@@ -239,6 +248,7 @@ export const SECTIONS: ChecklistSection[] = [
         partial: "Annonces au responsable d'évacuation incomplètes.",
         no: "Pas d'annonce au responsable d'évacuation.",
         reco: "liste",
+        allowNa: true,
       },
     ],
   },

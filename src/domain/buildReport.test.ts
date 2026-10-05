@@ -68,6 +68,15 @@ describe("formats", () => {
 });
 
 describe("checklist contract", () => {
+  it("offers N/A where a zone can be empty, never on the alarm and escape routes", () => {
+    const na = ALL_ITEMS.filter((i) => i.allowNa).map((i) => i.id);
+    for (const id of ["o_calm_pupils", "o_calm_staff", "o_procedure", "o_exits", "o_doors", "o_windows", "o_nowedge", "o_annex", "o_announce", "l_transfer", "l_closedoor", "o_visual"]) {
+      expect(na).toContain(id);
+    }
+    expect(na).not.toContain("o_audible");
+    expect(na).not.toContain("o_paths");
+  });
+
   it("has unique ids and a sentence for every value", () => {
     const ids = ALL_ITEMS.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -118,6 +127,17 @@ describe("synthesizeItem", () => {
     expect(r.line?.comments).toEqual([
       "« Salle 12 grande ouverte » (Luc Morel, 2e étage)",
     ]);
+  });
+
+  it("leaves N/A out of the report, even with a comment", () => {
+    const onlyNa = synthesizeItem(doors, [obs({ zone: "3e étage", answers: { o_doors: { v: "na", c: "Étage vide" } } })]);
+    expect(onlyNa).toEqual({ line: null, status: "na" });
+    const mixed = synthesizeItem(doors, [
+      obs({ zone: "Rez", answers: { o_doors: { v: "partial" } } }),
+      obs({ zone: "3e étage", answers: { o_doors: { v: "na", c: "Étage vide" } } }),
+      obs({ zone: "1er étage", answers: { o_doors: { v: "ok" } } }),
+    ]);
+    expect(mixed.line).toEqual({ text: "Quelques portes sont restées ouvertes (Rez). En ordre : 1er étage.", comments: [] });
   });
 
   it("reports missing when nobody answered", () => {

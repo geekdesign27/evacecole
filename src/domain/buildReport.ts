@@ -198,18 +198,16 @@ export function synthesizeItem(
   label: (o: ObservationInput) => string = zoneLabel,
 ): ItemSynthesis {
   const answered = observations.filter((o) => o.answers[item.id]?.v);
+  // N/A answers are left out of the report entirely, comments included.
   const comments = observations
-    .filter((o) => o.answers[item.id]?.c?.trim())
+    .filter((o) => o.answers[item.id]?.c?.trim() && o.answers[item.id]?.v !== "na")
     .map((o) => `« ${o.answers[item.id]!.c!.trim()} » ${attribution(o)}`);
 
   const real = answered.filter((o) => o.answers[item.id]!.v !== "na");
   if (real.length === 0) {
     if (answered.length > 0) {
-      // Only N/A: not a missing point, but comments still deserve a line.
-      return {
-        line: comments.length ? { text: "Sans objet.", comments } : null,
-        status: "na",
-      };
+      // Only N/A: not a missing point, and nothing in the report.
+      return { line: null, status: "na" };
     }
     return {
       line: comments.length ? { text: "Non évalué.", comments } : null,

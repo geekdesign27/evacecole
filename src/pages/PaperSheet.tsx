@@ -53,10 +53,10 @@ function Sheet({ role }: { role: Role }) {
           {TIME_FIELDS.filter((f) => role === "lead" || f === "tEvac").map(
             (f) => (
               <tr key={f}>
-                <td className="w-1/2 border border-ink px-2 py-1.5">
+                <td className="w-1/2 border border-ink px-2 py-1">
                   {TIME_LABELS[f]}
                 </td>
-                <td className="border border-ink px-2 py-1.5" />
+                <td className="border border-ink px-2 py-1" />
               </tr>
             ),
           )}
@@ -90,7 +90,7 @@ function Sheet({ role }: { role: Role }) {
             <tbody>
               {s.items.map((i) => (
                 <tr key={i.id}>
-                  <td className="border border-ink px-1 py-1.5">{i.label}</td>
+                  <td className="border border-ink px-1 py-1">{i.label}</td>
                   {(["ok", "partial", "no", "na"] as const).map((v) => (
                     <td key={v} className="border border-ink text-center">
                       {v === "na" && !i.allowNa ? "" : <span className={box} />}
@@ -109,7 +109,7 @@ function Sheet({ role }: { role: Role }) {
         </div>
       ))}
       <h2 className="mb-1 text-[13px] font-bold">Remarques</h2>
-      <div className="h-28 border border-ink" />
+      <div className="h-20 border border-ink" />
       <p className="mt-2 text-[10px]">
         Photos : installations et lieux uniquement, jamais d'élèves
         identifiables. Après l'exercice, recopier la fiche dans l'app.
@@ -121,7 +121,7 @@ function Sheet({ role }: { role: Role }) {
 export function PaperSheet() {
   return (
     <main className="bg-bg py-4 print:bg-white print:py-0">
-      <style>{`@page { size: A4; margin: 10mm; } @media print { .sheet + .sheet { break-before: page; } }`}</style>
+      <style>{`@page { size: A4; margin: 10mm; } @media print { .sheet ~ .sheet { break-before: page; } }`}</style>
       <p className="no-print mx-auto mb-4 max-w-[190mm] px-4">
         <button
           type="button"
